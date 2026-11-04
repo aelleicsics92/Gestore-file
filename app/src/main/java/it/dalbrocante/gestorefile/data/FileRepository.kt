@@ -29,17 +29,26 @@ class FileRepository(private val trashDir: File) {
     }
 
     fun list(dir: File, sort: SortMode = SortMode.NAME, showHidden: Boolean = false): List<FileItem> {
-        val items = dir.listFiles()
-            ?.filter { showHidden || !it.name.startsWith(".") }
-            ?.map { FileItem(it) }
-            ?: emptyList()
+        val files = dir.listFiles() ?: return emptyList()
+        val items = ArrayList<FileItem>(files.size)
+        for (f in files) {
+            if (!showHidden && f.name.startsWith(".")) continue
+            val a = try {
+                java.nio.file.Files.readAttributes(f.toPath(), java.nio.file.attribute.BasicFileAttributes::class.java)
+            } catch (e: Exception) { null }
+            items += if (a != null) {
+                FileItem(f, f.name, a.isDirectory, if (a.isDirectory) 0L else a.size(), a.lastModifiedTime().toMillis(), f.name.substringAfterLast('.', "").lowercase())
+            } else FileItem(f)
+        }
+        val byName = compareBy<FileItem, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
         val cmp: Comparator<FileItem> = when (sort) {
-            SortMode.NAME -> compareBy { it.name.lowercase() }
+            SortMode.NAME -> byName
             SortMode.DATE -> compareByDescending { it.modified }
             SortMode.SIZE -> compareByDescending { it.size }
-            SortMode.TYPE -> compareBy<FileItem> { it.ext }.thenBy { it.name.lowercase() }
+            SortMode.TYPE -> compareBy<FileItem> { it.ext }.then(byName)
         }
-        return items.sortedWith(compareByDescending<FileItem> { it.isDir }.then(cmp))
+        items.sortWith(compareByDescending<FileItem> { it.isDir }.then(cmp))
+        return items
     }
 
     fun createFolder(parent: File, name: String): Result<File> = runCatching {

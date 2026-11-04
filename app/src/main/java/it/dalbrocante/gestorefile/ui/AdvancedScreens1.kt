@@ -57,7 +57,9 @@ private fun Pane(
     dir: File, tick: Int, selected: Set<File>, active: Boolean, modifier: Modifier,
     onDir: (File) -> Unit, onSel: (Set<File>) -> Unit, onFocus: () -> Unit, vm: FileViewModel, onOpenFile: (File) -> Unit,
 ) {
-    val items = remember(dir, tick) { vm.repo.list(dir) }
+    val items by produceState(emptyList<it.dalbrocante.gestorefile.data.FileItem>(), dir, tick) {
+        value = withContext(Dispatchers.IO) { vm.repo.list(dir) }
+    }
     Column(modifier.clickable { onFocus() }) {
         Surface(color = if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant) {
             Text(dir.absolutePath, Modifier.fillMaxWidth().padding(6.dp), maxLines = 1, style = MaterialTheme.typography.labelSmall)

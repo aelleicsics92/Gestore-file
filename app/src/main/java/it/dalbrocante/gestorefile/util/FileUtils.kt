@@ -27,8 +27,11 @@ fun formatSize(bytes: Long): String {
     return "%.1f %s".format(v, units[i])
 }
 
-fun formatDate(ms: Long): String =
-    DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(ms))
+private val dateFmt = object : ThreadLocal<DateFormat>() {
+    override fun initialValue(): DateFormat = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+}
+
+fun formatDate(ms: Long): String = dateFmt.get()!!.format(Date(ms))
 
 fun uriFor(ctx: Context, file: File): Uri =
     FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)

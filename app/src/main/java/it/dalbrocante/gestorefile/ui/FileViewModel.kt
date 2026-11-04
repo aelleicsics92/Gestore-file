@@ -13,6 +13,7 @@ import it.dalbrocante.gestorefile.data.SearchFilter
 import it.dalbrocante.gestorefile.data.Store
 import it.dalbrocante.gestorefile.data.SortMode
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -44,16 +45,28 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var busy by mutableStateOf(false)
         private set
+    var loading by mutableStateOf(false)
+        private set
+    private var listJob: Job? = null
 
     init { refresh() }
 
+    /** Legge la cartella in background; una nuova richiesta annulla la precedente. */
     fun refresh() {
-        items = repo.list(currentDir, sort, showHidden)
+        listJob?.cancel()
+        val dir = currentDir; val s = sort; val h = showHidden
+        listJob = viewModelScope.launch {
+            loading = true
+            val r = withContext(Dispatchers.IO) { repo.list(dir, s, h) }
+            if (dir == currentDir) items = r
+            loading = false
+        }
     }
 
     fun open(dir: File) {
         if (!dir.isDirectory) return
         currentDir = dir
+        items = emptyList()
         selection = emptySet()
         searchResults = null
         refresh()

@@ -118,6 +118,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        it.dalbrocante.gestorefile.ui.AppPrefs.init(this)
         setContent {
             GestoreTheme {
                 Surface(Modifier.fillMaxSize()) { Root() }

@@ -1,69 +1,36 @@
 package it.dalbrocante.gestorefile.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Audiotrack
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ContentCut
-import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.CreateNewFolder
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.DriveFileRenameOutline
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Android
-import androidx.compose.material.icons.filled.Label
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.InsertDriveFile
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.VideoFile
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import it.dalbrocante.gestorefile.data.FileItem
 import it.dalbrocante.gestorefile.data.SortMode
 import it.dalbrocante.gestorefile.util.ARCHIVE_EXT
-import it.dalbrocante.gestorefile.util.AUDIO_EXT
-import it.dalbrocante.gestorefile.util.IMAGE_EXT
-import it.dalbrocante.gestorefile.util.VIDEO_EXT
 import it.dalbrocante.gestorefile.util.formatDate
 import it.dalbrocante.gestorefile.util.formatSize
 import it.dalbrocante.gestorefile.util.shareFiles
@@ -77,6 +44,8 @@ private sealed interface Dlg {
     data object DeleteConfirm : Dlg
     data object Search : Dlg
 }
+
+private enum class Sheet { NONE, NEW, MENU, MORE }
 
 /** Azioni di navigazione verso altre schermate (gestite da MainActivity). */
 data class Nav(
@@ -107,8 +76,9 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
     val ctx = LocalContext.current
     val snack = remember { SnackbarHostState() }
     var dlg by remember { mutableStateOf<Dlg?>(null) }
-    var menu by remember { mutableStateOf(false) }
+    var sheet by remember { mutableStateOf(Sheet.NONE) }
     val sel = vm.selection
+    val inSelection = sel.isNotEmpty()
     val list: List<FileItem> = vm.searchResults ?: vm.items
 
     LaunchedEffect(vm.message) {
@@ -116,102 +86,163 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snack) },
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        if (sel.isNotEmpty()) "${sel.size} selezionati" else vm.currentDir.name.ifEmpty { "Memoria" },
-                        maxLines = 1,
-                    )
-                },
-                actions = {
-                    if (sel.isNotEmpty()) {
-                        IconButton({ vm.selectAll() }) { Icon(Icons.Default.SelectAll, "Seleziona tutto") }
-                        IconButton({ vm.copySelection() }) { Icon(Icons.Default.ContentCopy, "Copia") }
-                        IconButton({ vm.cutSelection() }) { Icon(Icons.Default.ContentCut, "Taglia") }
-                        IconButton({ shareFiles(ctx, sel.toList()) }) { Icon(Icons.Default.Share, "Condividi") }
-                        IconButton({ dlg = Dlg.TrashConfirm }) { Icon(Icons.Default.Delete, "Elimina") }
-                        if (sel.size == 1) {
-                            IconButton({ dlg = Dlg.Rename(sel.first()) }) { Icon(Icons.Default.DriveFileRenameOutline, "Rinomina") }
+            if (inSelection) {
+                TopAppBar(
+                    title = { Text("${sel.size} selezionati", fontWeight = FontWeight.SemiBold) },
+                    navigationIcon = { IconButton({ vm.clearSelection() }) { Icon(Icons.Filled.Close, "Annulla selezione") } },
+                    actions = { IconButton({ vm.selectAll() }) { Icon(Icons.Filled.SelectAll, "Seleziona tutto") } },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+                )
+            } else {
+                Column(Modifier.statusBarsPadding().padding(horizontal = 20.dp, vertical = 8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                vm.currentDir.name.ifEmpty { "Memoria" },
+                                style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                if (vm.searchResults != null) "${list.size} risultati" else if (vm.loading && list.isEmpty()) "Caricamento…" else "${list.size} elementi",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
-                        IconButton({ nav.compressSelection(sel.toList()) }) { Icon(Icons.Default.Archive, "Comprimi") }
-                        IconButton({ nav.tagSelection(sel.toList()) }) { Icon(Icons.Default.Label, "Tag") }
-                        if (sel.size == 1 && sel.first().isFile) {
-                            IconButton({ nav.linkFile(sel.first()) }) { Icon(Icons.Default.Link, "Link temporaneo") }
-                        }
-                        if (sel.all { it.isFile && it.extension.equals("apk", true) }) {
-                            IconButton({ nav.installApks(sel.toList()) }) { Icon(Icons.Default.Android, "Installa APK") }
-                        }
-                    } else {
-                        if (vm.clipboard.isNotEmpty()) {
-                            IconButton({ vm.paste() }) { Icon(Icons.Default.ContentPaste, "Incolla") }
-                        }
-                        IconButton({ dlg = Dlg.Search }) { Icon(Icons.Default.Search, "Cerca") }
-                        IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, "Menu") }
-                        DropdownMenu(menu, { menu = false }) {
-                            DropdownMenuItem({ Text("Nuovo file") }, { menu = false; dlg = Dlg.NewFile })
-                            DropdownMenuItem({ Text("Ordina per nome") }, { menu = false; vm.changeSort(SortMode.NAME) })
-                            DropdownMenuItem({ Text("Ordina per data") }, { menu = false; vm.changeSort(SortMode.DATE) })
-                            DropdownMenuItem({ Text("Ordina per dimensione") }, { menu = false; vm.changeSort(SortMode.SIZE) })
-                            DropdownMenuItem({ Text("Ordina per tipo") }, { menu = false; vm.changeSort(SortMode.TYPE) })
-                            DropdownMenuItem({ Text(if (vm.showHidden) "Nascondi file nascosti" else "Mostra file nascosti") }, { menu = false; vm.toggleHidden() })
-                            DropdownMenuItem({ Text("Cestino") }, { menu = false; nav.openTrash() })
-                            DropdownMenuItem({ Text("Analizzatore spazio") }, { menu = false; nav.openStorage() })
-                            DropdownMenuItem({ Text("Doppio pannello") }, { menu = false; nav.openDual() })
-                            DropdownMenuItem({ Text("Scansiona documento") }, { menu = false; nav.scan() })
-                            DropdownMenuItem({ Text("Tag") }, { menu = false; nav.openTags() })
-                            DropdownMenuItem({ Text("Regole di smistamento") }, { menu = false; nav.openRules() })
-                            DropdownMenuItem({ Text("Statistiche") }, { menu = false; nav.openStats() })
-                            DropdownMenuItem({ Text("Strumenti") }, { menu = false; nav.openTools() })
-                        }
+                        FilledTonalIconButton({ dlg = Dlg.Search }) { Icon(Icons.Filled.Search, "Cerca") }
+                        Spacer(Modifier.width(8.dp))
+                        FilledTonalIconButton({ sheet = Sheet.MENU }) { Icon(Icons.Filled.Tune, "Menu") }
                     }
-                },
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton({ dlg = Dlg.NewFolder }) { Icon(Icons.Default.CreateNewFolder, "Nuova cartella") }
+                    Spacer(Modifier.height(8.dp))
+                    Breadcrumb(vm.currentDir, vm.root) { vm.open(it) }
+                }
+            }
         },
     ) { pad ->
-        Column(Modifier.padding(pad).fillMaxSize()) {
-            if (vm.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            Text(
-                vm.currentDir.absolutePath,
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                maxLines = 1,
-            )
-            LazyColumn(Modifier.fillMaxSize()) {
-                items(list, key = { it.file.absolutePath }) { item ->
+        Box(Modifier.padding(pad).fillMaxSize()) {
+            if (vm.loading || vm.busy) LinearProgressIndicator(Modifier.fillMaxWidth().height(3.dp).align(Alignment.TopCenter))
+
+            if (list.isEmpty() && !vm.loading) {
+                Column(Modifier.align(Alignment.Center).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Filled.FolderOpen, null, Modifier.size(72.dp), tint = MaterialTheme.colorScheme.outlineVariant)
+                    Spacer(Modifier.height(8.dp))
+                    Text(if (vm.searchResults != null) "Nessun risultato" else "Cartella vuota", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 140.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                items(list, key = { it.file.absolutePath }, contentType = { if (it.isDir) 0 else 1 }) { item ->
                     val selected = item.file in sel
-                    ListItem(
-                        modifier = Modifier.semantics(mergeDescendants = true) {
-                            contentDescription = (if (item.isDir) "Cartella " else "File ") + item.name +
-                                (if (item.isDir) "" else ", " + formatSize(item.size)) + ", " + formatDate(item.modified) +
-                                (if (selected) ", selezionato" else "")
-                        }.combinedClickable(
-                            onClick = {
-                                when {
-                                    sel.isNotEmpty() -> vm.toggleSelect(item.file)
-                                    item.isDir -> vm.open(item.file)
-                                    item.ext in ARCHIVE_EXT && item.ext != "cbz" && item.ext != "cbr" -> nav.extractArchive(item.file)
-                                    else -> nav.openFile(item.file)
-                                }
-                            },
-                            onLongClick = { vm.toggleSelect(item.file) },
-                        ),
-                        leadingContent = {
-                            if (sel.isNotEmpty()) Checkbox(selected, { vm.toggleSelect(item.file) })
-                            else Icon(iconFor(item), null)
+                    FileCard(
+                        item, selected, inSelection,
+                        onClick = {
+                            when {
+                                inSelection -> vm.toggleSelect(item.file)
+                                item.isDir -> vm.open(item.file)
+                                item.ext in ARCHIVE_EXT && item.ext != "cbz" && item.ext != "cbr" -> nav.extractArchive(item.file)
+                                else -> nav.openFile(item.file)
+                            }
                         },
-                        headlineContent = { Text(item.name, maxLines = 1) },
-                        supportingContent = {
-                            Text(
-                                if (item.isDir) formatDate(item.modified)
-                                else "${formatSize(item.size)}  ${formatDate(item.modified)}",
-                            )
-                        },
+                        onLongClick = { vm.toggleSelect(item.file) },
                     )
+                }
+            }
+
+            // Azioni flottanti
+            Column(
+                Modifier.align(Alignment.BottomEnd).padding(20.dp).navigationBarsPadding(),
+                horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                AnimatedVisibility(vm.clipboard.isNotEmpty() && !inSelection, enter = fadeIn() + slideInVertically { it }, exit = fadeOut() + slideOutVertically { it }) {
+                    ExtendedFloatingActionButton(
+                        { vm.paste() }, icon = { Icon(Icons.Filled.ContentPaste, null) },
+                        text = { Text("Incolla (${vm.clipboard.size})") },
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
+                AnimatedVisibility(!inSelection, enter = fadeIn(), exit = fadeOut()) {
+                    FloatingActionButton({ sheet = Sheet.NEW }, shape = RoundedCornerShape(22.dp), containerColor = MaterialTheme.colorScheme.primary) {
+                        Icon(Icons.Filled.Add, "Nuovo")
+                    }
+                }
+            }
+
+            // Barra azioni per la selezione
+            AnimatedVisibility(
+                inSelection, Modifier.align(Alignment.BottomCenter).padding(16.dp).navigationBarsPadding(),
+                enter = fadeIn() + slideInVertically { it }, exit = fadeOut() + slideOutVertically { it },
+            ) {
+                Surface(shape = RoundedCornerShape(32.dp), tonalElevation = 8.dp, shadowElevation = 12.dp, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                    Row(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        BarAction(Icons.Filled.ContentCopy, "Copia") { vm.copySelection() }
+                        BarAction(Icons.Filled.ContentCut, "Taglia") { vm.cutSelection() }
+                        BarAction(Icons.Filled.Share, "Condividi") { shareFiles(ctx, sel.toList()) }
+                        BarAction(Icons.Filled.Delete, "Elimina", tint = MaterialTheme.colorScheme.error) { dlg = Dlg.TrashConfirm }
+                        BarAction(Icons.Filled.MoreHoriz, "Altro") { sheet = Sheet.MORE }
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- Bottom sheet ----
+    if (sheet != Sheet.NONE) {
+        ModalBottomSheet(onDismissRequest = { sheet = Sheet.NONE }, shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)) {
+            Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 32.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                when (sheet) {
+                    Sheet.NEW -> {
+                        SectionHeader("Crea")
+                        TileGrid(
+                            listOf(
+                                Tile(Icons.Filled.CreateNewFolder, "Nuova cartella", Color(0xFFFFB020)) { sheet = Sheet.NONE; dlg = Dlg.NewFolder },
+                                Tile(Icons.Filled.NoteAdd, "Nuovo file", Color(0xFF3B82F6)) { sheet = Sheet.NONE; dlg = Dlg.NewFile },
+                                Tile(Icons.Filled.DocumentScanner, "Scansiona", Color(0xFF8B5CF6)) { sheet = Sheet.NONE; nav.scan() },
+                            ),
+                        )
+                    }
+                    Sheet.MENU -> {
+                        SectionHeader("Ordina per")
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(SortMode.NAME to "Nome", SortMode.DATE to "Data", SortMode.SIZE to "Dimensione", SortMode.TYPE to "Tipo").forEach { (m, l) ->
+                                FilterChip(vm.sort == m, { vm.changeSort(m) }, { Text(l) })
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Mostra file nascosti", Modifier.weight(1f))
+                            Switch(vm.showHidden, { vm.toggleHidden() })
+                        }
+                        SectionHeader("Vai a")
+                        TileGrid(
+                            listOf(
+                                Tile(Icons.Filled.Delete, "Cestino", Color(0xFF64748B)) { sheet = Sheet.NONE; nav.openTrash() },
+                                Tile(Icons.Filled.PieChart, "Spazio", Color(0xFF5B4BDB)) { sheet = Sheet.NONE; nav.openStorage() },
+                                Tile(Icons.Filled.BarChart, "Statistiche", Color(0xFF0EA5E9)) { sheet = Sheet.NONE; nav.openStats() },
+                                Tile(Icons.Filled.Label, "Tag", Color(0xFFEC4899)) { sheet = Sheet.NONE; nav.openTags() },
+                                Tile(Icons.Filled.VerticalSplit, "Doppio pannello", Color(0xFF14B8A6)) { sheet = Sheet.NONE; nav.openDual() },
+                                Tile(Icons.Filled.Apps, "Strumenti", Color(0xFFFB7A3D)) { sheet = Sheet.NONE; nav.openTools() },
+                            ),
+                        )
+                    }
+                    Sheet.MORE -> {
+                        SectionHeader("Azioni")
+                        val one = sel.singleOrNull()
+                        val tiles = buildList {
+                            if (one != null) add(Tile(Icons.Filled.DriveFileRenameOutline, "Rinomina", Color(0xFF3B82F6)) { sheet = Sheet.NONE; dlg = Dlg.Rename(one) })
+                            add(Tile(Icons.Filled.Inventory2, "Comprimi", Color(0xFF8B5CF6)) { sheet = Sheet.NONE; nav.compressSelection(sel.toList()) })
+                            add(Tile(Icons.Filled.Label, "Tag", Color(0xFFEC4899)) { sheet = Sheet.NONE; nav.tagSelection(sel.toList()) })
+                            if (one != null && one.isFile) add(Tile(Icons.Filled.Link, "Link temporaneo", Color(0xFF06B6D4)) { sheet = Sheet.NONE; nav.linkFile(one) })
+                            if (sel.all { it.isFile && it.extension.equals("apk", true) }) {
+                                add(Tile(Icons.Filled.Android, "Installa APK", Color(0xFF14B8A6)) { sheet = Sheet.NONE; nav.installApks(sel.toList()) })
+                            }
+                            add(Tile(Icons.Filled.DeleteForever, "Elimina per sempre", Color(0xFFE5484D)) { sheet = Sheet.NONE; dlg = Dlg.DeleteConfirm })
+                        }
+                        TileGrid(tiles)
+                    }
+                    Sheet.NONE -> Unit
                 }
             }
         }
@@ -234,13 +265,88 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
     }
 }
 
-private fun iconFor(i: FileItem) = when {
-    i.isDir -> Icons.Default.Folder
-    i.ext in IMAGE_EXT -> Icons.Default.Image
-    i.ext in VIDEO_EXT -> Icons.Default.VideoFile
-    i.ext in AUDIO_EXT -> Icons.Default.Audiotrack
-    i.ext in ARCHIVE_EXT -> Icons.Default.Archive
-    i.ext == "pdf" -> Icons.Default.PictureAsPdf
-    i.ext in setOf("doc", "docx", "xls", "xlsx", "txt", "csv", "odt", "ods") -> Icons.Default.Description
-    else -> Icons.Default.InsertDriveFile
+@Composable
+private fun BarAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, tint: Color = MaterialTheme.colorScheme.onSurface, onClick: () -> Unit) {
+    IconButton(onClick) { Icon(icon, label, tint = tint) }
+}
+
+@Composable
+private fun Breadcrumb(dir: File, root: File, onNav: (File) -> Unit) {
+    val parts = remember(dir) {
+        val rel = runCatching { dir.relativeTo(root).path }.getOrDefault("")
+        val list = ArrayList<Pair<String, File>>()
+        list += "Memoria" to root
+        var cur = root
+        rel.split(File.separatorChar).filter { it.isNotEmpty() && it != "." }.forEach { seg ->
+            cur = File(cur, seg); list += seg to cur
+        }
+        list
+    }
+    val scroll = rememberScrollState()
+    LaunchedEffect(dir) { scroll.animateScrollTo(scroll.maxValue) }
+    Row(Modifier.horizontalScroll(scroll), verticalAlignment = Alignment.CenterVertically) {
+        parts.forEachIndexed { i, (name, f) ->
+            val last = i == parts.lastIndex
+            AssistChip(
+                onClick = { if (!last) onNav(f) },
+                label = { Text(name, maxLines = 1, fontWeight = if (last) FontWeight.SemiBold else FontWeight.Normal) },
+                shape = RoundedCornerShape(14.dp),
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = if (last) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                    labelColor = if (last) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+                border = null,
+            )
+            if (!last) Icon(Icons.Filled.ChevronRight, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.outline)
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FileCard(item: FileItem, selected: Boolean, selectionMode: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
+    val shape = RoundedCornerShape(22.dp)
+    ElevatedCard(
+        shape = shape,
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = if (selected) 0.dp else 2.dp),
+    ) {
+        Row(
+            Modifier.clip(shape)
+                .semantics(mergeDescendants = true) {
+                    contentDescription = (if (item.isDir) "Cartella " else "File ") + item.name +
+                        (if (item.isDir) "" else ", " + formatSize(item.size)) + ", " + formatDate(item.modified) +
+                        (if (selected) ", selezionato" else "")
+                }
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FileThumb(item)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(item.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    if (item.isDir) formatDate(item.modified) else "${formatSize(item.size)}  ·  ${formatDate(item.modified)}",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                )
+            }
+            if (selectionMode) {
+                Box(
+                    Modifier.size(26.dp).clip(CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        if (selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null,
+                        tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                    )
+                }
+            } else if (item.isDir) {
+                Icon(Icons.Filled.ChevronRight, null, tint = MaterialTheme.colorScheme.outline)
+            }
+        }
+    }
 }
