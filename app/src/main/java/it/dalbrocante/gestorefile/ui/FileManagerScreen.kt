@@ -11,7 +11,9 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -251,7 +253,7 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
                     userScrollEnabled = !dragging,
                 ) {
-                    items(list, key = { it.file.absolutePath }, contentType = { if (it.isDir) 0 else 1 }) { item ->
+                    gridItems(list, key = { it.file.absolutePath }, contentType = { if (it.isDir) 0 else 1 }) { item ->
                         GridCard(item, item.file in sel, inSelection) { onItemClick(item) }
                     }
                 }
