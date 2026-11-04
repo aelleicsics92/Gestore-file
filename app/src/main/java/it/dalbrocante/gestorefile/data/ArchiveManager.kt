@@ -55,7 +55,7 @@ object ArchiveManager {
             generateSequence { s.nextEntry }.map { ArchiveEntryInfo(it.name, it.isDirectory, it.size) }.toList()
         }
         "tar", "tgz", "tbz2", "txz" -> tarStream(f).use { ais ->
-            generateSequence<ArchiveEntry> { ais.nextEntry }.map { ArchiveEntryInfo(it.name, it.isDirectory, it.size) }.toList()
+            generateSequence { ais.nextEntry }.map { ArchiveEntryInfo(it.name, it.isDirectory, it.size) }.toList()
         }
         else -> listOf(ArchiveEntryInfo(f.nameWithoutExtension, false, f.length()))
     }
@@ -145,9 +145,8 @@ object ArchiveManager {
     fun createTarGz(sources: List<File>, target: File) {
         target.outputStream().buffered().use { fos ->
             val gz = CompressorStreamFactory().createCompressorOutputStream(CompressorStreamFactory.GZIP, fos)
-            val tar = ArchiveStreamFactory().createArchiveOutputStream(ArchiveStreamFactory.TAR, gz)
-            (tar as org.apache.commons.compress.archivers.tar.TarArchiveOutputStream)
-                .setLongFileMode(org.apache.commons.compress.archivers.tar.TarArchiveOutputStream.LONGFILE_POSIX)
+            val tar = org.apache.commons.compress.archivers.tar.TarArchiveOutputStream(gz)
+            tar.setLongFileMode(org.apache.commons.compress.archivers.tar.TarArchiveOutputStream.LONGFILE_POSIX)
             fun add(f: File, base: String) {
                 val name = base + f.name
                 tar.putArchiveEntry(tar.createArchiveEntry(f, name))
@@ -160,7 +159,7 @@ object ArchiveManager {
         }
     }
 
-    private fun tarStream(f: File): org.apache.commons.compress.archivers.ArchiveInputStream<*> {
+    private fun tarStream(f: File): org.apache.commons.compress.archivers.tar.TarArchiveInputStream {
         val base: InputStream = BufferedInputStream(FileInputStream(f))
         val wrapped: InputStream = when (kind(f)) {
             "tgz" -> CompressorStreamFactory().createCompressorInputStream(CompressorStreamFactory.GZIP, base)
@@ -168,7 +167,7 @@ object ArchiveManager {
             "txz" -> CompressorStreamFactory().createCompressorInputStream(CompressorStreamFactory.XZ, base)
             else -> base
         }
-        return ArchiveStreamFactory().createArchiveInputStream(ArchiveStreamFactory.TAR, BufferedInputStream(wrapped))
+        return org.apache.commons.compress.archivers.tar.TarArchiveInputStream(BufferedInputStream(wrapped))
     }
 
     /** Protezione zip-slip. */
