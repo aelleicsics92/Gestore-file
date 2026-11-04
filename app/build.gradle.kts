@@ -103,3 +103,8 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
+
+// pdfbox-android e smbj portano due varianti di BouncyCastle: teniamo solo jdk18on.
+configurations.all {
+    exclude(group = "org.bouncycastle", module = "bcprov-jdk15to18")
+}
