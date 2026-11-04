@@ -159,10 +159,13 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
             ) {
                 AnimatedVisibility(vm.clipboard.isNotEmpty() && !inSelection, enter = fadeIn() + slideInVertically { it }, exit = fadeOut() + slideOutVertically { it }) {
                     ExtendedFloatingActionButton(
-                        { vm.paste() }, icon = { Icon(Icons.Filled.ContentPaste, null) },
-                        text = { Text("Incolla (${vm.clipboard.size})") },
+                        onClick = { vm.paste() },
                         containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    )
+                    ) {
+                        Icon(Icons.Filled.ContentPaste, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Incolla (${vm.clipboard.size})")
+                    }
                 }
                 AnimatedVisibility(!inSelection, enter = fadeIn(), exit = fadeOut()) {
                     FloatingActionButton({ sheet = Sheet.NEW }, shape = RoundedCornerShape(22.dp), containerColor = MaterialTheme.colorScheme.primary) {
