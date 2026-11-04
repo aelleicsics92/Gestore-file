@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PictureAsPdf
@@ -81,6 +82,10 @@ data class Nav(
     val openTrash: () -> Unit,
     val openStorage: () -> Unit,
     val openTools: () -> Unit,
+    val tagSelection: (List<File>) -> Unit,
+    val openTags: () -> Unit,
+    val openRules: () -> Unit,
+    val openStats: () -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -118,6 +123,7 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                             IconButton({ dlg = Dlg.Rename(sel.first()) }) { Icon(Icons.Default.DriveFileRenameOutline, "Rinomina") }
                         }
                         IconButton({ nav.compressSelection(sel.toList()) }) { Icon(Icons.Default.Archive, "Comprimi") }
+                        IconButton({ nav.tagSelection(sel.toList()) }) { Icon(Icons.Default.Label, "Tag") }
                     } else {
                         if (vm.clipboard.isNotEmpty()) {
                             IconButton({ vm.paste() }) { Icon(Icons.Default.ContentPaste, "Incolla") }
@@ -133,6 +139,9 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                             DropdownMenuItem({ Text(if (vm.showHidden) "Nascondi file nascosti" else "Mostra file nascosti") }, { menu = false; vm.toggleHidden() })
                             DropdownMenuItem({ Text("Cestino") }, { menu = false; nav.openTrash() })
                             DropdownMenuItem({ Text("Analizzatore spazio") }, { menu = false; nav.openStorage() })
+                            DropdownMenuItem({ Text("Tag") }, { menu = false; nav.openTags() })
+                            DropdownMenuItem({ Text("Regole di smistamento") }, { menu = false; nav.openRules() })
+                            DropdownMenuItem({ Text("Statistiche") }, { menu = false; nav.openStats() })
                             DropdownMenuItem({ Text("Strumenti") }, { menu = false; nav.openTools() })
                         }
                     }

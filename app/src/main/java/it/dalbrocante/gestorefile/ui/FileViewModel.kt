@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import it.dalbrocante.gestorefile.data.FileItem
 import it.dalbrocante.gestorefile.data.FileRepository
 import it.dalbrocante.gestorefile.data.SearchFilter
+import it.dalbrocante.gestorefile.data.Store
 import it.dalbrocante.gestorefile.data.SortMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -21,6 +22,7 @@ enum class ClipMode { COPY, CUT }
 class FileViewModel(app: Application) : AndroidViewModel(app) {
 
     val repo = FileRepository(File(app.filesDir, ".trash"))
+    val store = Store(app.filesDir)
     val root: File = Environment.getExternalStorageDirectory()
 
     var currentDir by mutableStateOf(root)

@@ -34,6 +34,10 @@ import it.dalbrocante.gestorefile.ui.FileViewModel
 import it.dalbrocante.gestorefile.ui.GestoreTheme
 import it.dalbrocante.gestorefile.ui.Nav
 import it.dalbrocante.gestorefile.ui.StorageScreen
+import it.dalbrocante.gestorefile.ui.RulesScreen
+import it.dalbrocante.gestorefile.ui.StatsScreen
+import it.dalbrocante.gestorefile.ui.TagDialog
+import it.dalbrocante.gestorefile.ui.TagsScreen
 import it.dalbrocante.gestorefile.ui.ToolsScreen
 import it.dalbrocante.gestorefile.ui.TrashScreen
 import it.dalbrocante.gestorefile.ui.VaultScreen
@@ -50,6 +54,9 @@ private sealed interface Route {
     data object Storage : Route
     data object Tools : Route
     data object Vault : Route
+    data object Tags : Route
+    data object Rules : Route
+    data object Stats : Route
 }
 
 class MainActivity : FragmentActivity() {
@@ -91,6 +98,7 @@ class MainActivity : FragmentActivity() {
 
         var route by remember { mutableStateOf<Route>(Route.Files) }
         var compress by remember { mutableStateOf<List<File>?>(null) }
+        var tagging by remember { mutableStateOf<List<File>?>(null) }
 
         BackHandler(route != Route.Files || vm.currentDir != vm.root || vm.selection.isNotEmpty() || vm.searchResults != null) {
             if (route != Route.Files) route = Route.Files else vm.up()
@@ -105,6 +113,10 @@ class MainActivity : FragmentActivity() {
             openTrash = { route = Route.Trash },
             openStorage = { route = Route.Storage },
             openTools = { route = Route.Tools },
+            tagSelection = { tagging = it },
+            openTags = { route = Route.Tags },
+            openRules = { route = Route.Rules },
+            openStats = { route = Route.Stats },
         )
 
         when (val r = route) {
@@ -115,6 +127,13 @@ class MainActivity : FragmentActivity() {
             Route.Storage -> StorageScreen(vm) { route = Route.Files }
             Route.Tools -> ToolsScreen(vm, { route = Route.Files }) { route = Route.Vault }
             Route.Vault -> VaultScreen(vm) { route = Route.Tools }
+            Route.Tags -> TagsScreen(vm.store, { vm.open(it); route = Route.Files }) { route = Route.Files }
+            Route.Rules -> RulesScreen(vm, vm.store) { route = Route.Files }
+            Route.Stats -> StatsScreen(vm) { route = Route.Files }
+        }
+
+        tagging?.let { src ->
+            TagDialog(vm.store, src, { tagging = null }) { tagging = null; vm.clearSelection() }
         }
 
         compress?.let { src ->
