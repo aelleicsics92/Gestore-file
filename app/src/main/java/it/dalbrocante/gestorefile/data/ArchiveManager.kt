@@ -22,7 +22,7 @@ object ArchiveManager {
     private fun kind(f: File): String {
         val n = f.name.lowercase()
         return when {
-            n.endsWith(".zip") || n.endsWith(".cbz") || n.endsWith(".jar") -> "zip"
+            n.endsWith(".zip") || n.endsWith(".cbz") || n.endsWith(".jar") || n.endsWith(".epub") -> "zip"
             n.endsWith(".rar") || n.endsWith(".cbr") -> "rar"
             n.endsWith(".7z") -> "7z"
             n.endsWith(".tar.gz") || n.endsWith(".tgz") -> "tgz"

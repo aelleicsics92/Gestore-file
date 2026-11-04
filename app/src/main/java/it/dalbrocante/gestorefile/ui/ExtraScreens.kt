@@ -44,6 +44,7 @@ import it.dalbrocante.gestorefile.data.FileItem
 import it.dalbrocante.gestorefile.data.Tools
 import it.dalbrocante.gestorefile.data.Vault
 import it.dalbrocante.gestorefile.net.FtpServerService
+import it.dalbrocante.gestorefile.util.Updater
 import it.dalbrocante.gestorefile.util.formatDate
 import it.dalbrocante.gestorefile.util.formatSize
 import kotlinx.coroutines.Dispatchers
@@ -125,7 +126,7 @@ fun StorageScreen(vm: FileViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-fun ToolsScreen(vm: FileViewModel, onBack: () -> Unit, onVault: () -> Unit) {
+fun ToolsScreen(vm: FileViewModel, nav: Nav, onBack: () -> Unit, onVault: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var ftp by remember { mutableStateOf(FtpServerService.running) }
@@ -133,9 +134,31 @@ fun ToolsScreen(vm: FileViewModel, onBack: () -> Unit, onVault: () -> Unit) {
     var dups by remember { mutableStateOf<List<List<File>>?>(null) }
     var status by remember { mutableStateOf<String?>(null) }
     var scanning by remember { mutableStateOf(false) }
+    var upd by remember { mutableStateOf<Updater.Info?>(null) }
+    var upMsg by remember { mutableStateOf<String?>(null) }
 
     SimpleScaffold("Strumenti", onBack) {
         LazyColumn(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item {
+                Text("Strumenti avanzati", style = MaterialTheme.typography.titleSmall)
+                listOf(
+                    "Doppio pannello" to nav.openDual, "Strumenti PDF (unisci, dividi, firma)" to nav.openPdfTools,
+                    "Cerca nel testo (OCR)" to nav.openOcr, "Scansiona documento" to nav.scan,
+                    "Rete (FTP, SFTP, SMB)" to nav.openRemote, "Cloud e memorie esterne" to nav.openCloud,
+                    "Terminale e root" to nav.openTerminal,
+                ).forEach { (l, a) -> OutlinedButton(a, Modifier.fillMaxWidth().padding(top = 4.dp)) { Text(l) } }
+            }
+            item {
+                Text("Aggiornamenti", style = MaterialTheme.typography.titleSmall)
+                Text("Build installata: ${Updater.currentBuild()}")
+                Button({
+                    scope.launch {
+                        val i = withContext(Dispatchers.IO) { Updater.check() }
+                        if (i != null && Updater.isNewer(i)) upd = i else upMsg = if (i == null) "Controllo non riuscito" else "Sei aggiornato"
+                    }
+                }) { Text("Cerca aggiornamenti") }
+                upMsg?.let { Text(it) }
+            }
             item {
                 Text("Server FTP", style = MaterialTheme.typography.titleSmall)
                 Text(
@@ -194,6 +217,7 @@ fun ToolsScreen(vm: FileViewModel, onBack: () -> Unit, onVault: () -> Unit) {
                 status?.let { Text(it) }
             }
         }
+        upd?.let { UpdateDialog(it) { upd = null } }
     }
 }
 

@@ -22,7 +22,9 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PictureAsPdf
@@ -53,6 +55,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import it.dalbrocante.gestorefile.data.FileItem
 import it.dalbrocante.gestorefile.data.SortMode
@@ -86,6 +90,15 @@ data class Nav(
     val openTags: () -> Unit,
     val openRules: () -> Unit,
     val openStats: () -> Unit,
+    val openDual: () -> Unit,
+    val openPdfTools: () -> Unit,
+    val openOcr: () -> Unit,
+    val openRemote: () -> Unit,
+    val openCloud: () -> Unit,
+    val openTerminal: () -> Unit,
+    val scan: () -> Unit,
+    val linkFile: (File) -> Unit,
+    val installApks: (List<File>) -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -124,6 +137,12 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                         }
                         IconButton({ nav.compressSelection(sel.toList()) }) { Icon(Icons.Default.Archive, "Comprimi") }
                         IconButton({ nav.tagSelection(sel.toList()) }) { Icon(Icons.Default.Label, "Tag") }
+                        if (sel.size == 1 && sel.first().isFile) {
+                            IconButton({ nav.linkFile(sel.first()) }) { Icon(Icons.Default.Link, "Link temporaneo") }
+                        }
+                        if (sel.all { it.isFile && it.extension.equals("apk", true) }) {
+                            IconButton({ nav.installApks(sel.toList()) }) { Icon(Icons.Default.Android, "Installa APK") }
+                        }
                     } else {
                         if (vm.clipboard.isNotEmpty()) {
                             IconButton({ vm.paste() }) { Icon(Icons.Default.ContentPaste, "Incolla") }
@@ -139,6 +158,8 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                             DropdownMenuItem({ Text(if (vm.showHidden) "Nascondi file nascosti" else "Mostra file nascosti") }, { menu = false; vm.toggleHidden() })
                             DropdownMenuItem({ Text("Cestino") }, { menu = false; nav.openTrash() })
                             DropdownMenuItem({ Text("Analizzatore spazio") }, { menu = false; nav.openStorage() })
+                            DropdownMenuItem({ Text("Doppio pannello") }, { menu = false; nav.openDual() })
+                            DropdownMenuItem({ Text("Scansiona documento") }, { menu = false; nav.scan() })
                             DropdownMenuItem({ Text("Tag") }, { menu = false; nav.openTags() })
                             DropdownMenuItem({ Text("Regole di smistamento") }, { menu = false; nav.openRules() })
                             DropdownMenuItem({ Text("Statistiche") }, { menu = false; nav.openStats() })
@@ -164,12 +185,16 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                 items(list, key = { it.file.absolutePath }) { item ->
                     val selected = item.file in sel
                     ListItem(
-                        modifier = Modifier.combinedClickable(
+                        modifier = Modifier.semantics(mergeDescendants = true) {
+                            contentDescription = (if (item.isDir) "Cartella " else "File ") + item.name +
+                                (if (item.isDir) "" else ", " + formatSize(item.size)) + ", " + formatDate(item.modified) +
+                                (if (selected) ", selezionato" else "")
+                        }.combinedClickable(
                             onClick = {
                                 when {
                                     sel.isNotEmpty() -> vm.toggleSelect(item.file)
                                     item.isDir -> vm.open(item.file)
-                                    item.ext in ARCHIVE_EXT -> nav.extractArchive(item.file)
+                                    item.ext in ARCHIVE_EXT && item.ext != "cbz" && item.ext != "cbr" -> nav.extractArchive(item.file)
                                     else -> nav.openFile(item.file)
                                 }
                             },

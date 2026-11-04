@@ -12,13 +12,26 @@ android {
         applicationId = "it.dalbrocante.gestorefile"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        val run = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionCode = 100 + run
+        versionName = "0.3.$run"
+    }
+
+    // Firma stabile: stesso keystore a ogni build, così gli aggiornamenti si installano sopra la versione precedente.
+    signingConfigs {
+        create("stable") {
+            storeFile = rootProject.file("signing/gestorefile.jks")
+            storePassword = "euKvURZ7FmumpofWl4h0"
+            keyAlias = "gestore"
+            keyPassword = "euKvURZ7FmumpofWl4h0"
+        }
     }
 
     buildTypes {
+        debug { signingConfig = signingConfigs.getByName("stable") }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("stable")
         }
     }
 
@@ -31,9 +44,13 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     packaging {
-        resources.excludes += setOf("META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*")
+        resources.excludes += setOf(
+            "META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*", "META-INF/AL2.0", "META-INF/LGPL2.1",
+            "META-INF/INDEX.LIST", "META-INF/io.netty.versions.properties", "META-INF/versions/**", "META-INF/*.kotlin_module",
+        )
     }
 }
 
@@ -71,6 +88,18 @@ dependencies {
     // Server FTP integrato
     implementation("org.apache.ftpserver:ftpserver-core:1.2.0")
     implementation("org.slf4j:slf4j-android:1.7.36")
+
+    // OCR e scanner documenti (ML Kit)
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1")
+
+    // PDF: unisci, dividi, firma
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+
+    // Reti: FTP, SFTP, SMB
+    implementation("commons-net:commons-net:3.11.1")
+    implementation("com.github.mwiede:jsch:0.2.20")
+    implementation("com.hierynomus:smbj:0.13.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

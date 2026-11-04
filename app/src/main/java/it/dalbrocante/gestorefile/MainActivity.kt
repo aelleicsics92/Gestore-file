@@ -3,11 +3,13 @@ package it.dalbrocante.gestorefile
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
-import android.os.Bundle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,6 +19,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,24 +31,42 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
+import it.dalbrocante.gestorefile.data.ApkInstaller
 import it.dalbrocante.gestorefile.ui.ArchiveScreen
+import it.dalbrocante.gestorefile.ui.CloudScreen
 import it.dalbrocante.gestorefile.ui.CompressDialog
+import it.dalbrocante.gestorefile.ui.DualPaneScreen
 import it.dalbrocante.gestorefile.ui.FileManagerScreen
 import it.dalbrocante.gestorefile.ui.FileViewModel
 import it.dalbrocante.gestorefile.ui.GestoreTheme
+import it.dalbrocante.gestorefile.ui.LinkDialog
 import it.dalbrocante.gestorefile.ui.Nav
-import it.dalbrocante.gestorefile.ui.StorageScreen
+import it.dalbrocante.gestorefile.ui.OcrScreen
+import it.dalbrocante.gestorefile.ui.PdfToolsScreen
+import it.dalbrocante.gestorefile.ui.RemoteScreen
 import it.dalbrocante.gestorefile.ui.RulesScreen
 import it.dalbrocante.gestorefile.ui.StatsScreen
+import it.dalbrocante.gestorefile.ui.StorageScreen
 import it.dalbrocante.gestorefile.ui.TagDialog
 import it.dalbrocante.gestorefile.ui.TagsScreen
+import it.dalbrocante.gestorefile.ui.TerminalScreen
 import it.dalbrocante.gestorefile.ui.ToolsScreen
 import it.dalbrocante.gestorefile.ui.TrashScreen
+import it.dalbrocante.gestorefile.ui.UpdateDialog
 import it.dalbrocante.gestorefile.ui.VaultScreen
 import it.dalbrocante.gestorefile.ui.ViewerScreen
 import it.dalbrocante.gestorefile.ui.hasInternalViewer
+import it.dalbrocante.gestorefile.util.Updater
 import it.dalbrocante.gestorefile.util.openExternal
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private sealed interface Route {
     data object Files : Route
@@ -57,11 +79,42 @@ private sealed interface Route {
     data object Tags : Route
     data object Rules : Route
     data object Stats : Route
+    data object Dual : Route
+    data object PdfTools : Route
+    data object Ocr : Route
+    data object Remote : Route
+    data object Cloud : Route
+    data object Terminal : Route
 }
 
 class MainActivity : FragmentActivity() {
 
     private val vm: FileViewModel by viewModels()
+
+    private val scanLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
+        if (res.resultCode != RESULT_OK) return@registerForActivityResult
+        val uri = GmsDocumentScanningResult.fromActivityResultIntent(res.data)?.pdf?.uri ?: return@registerForActivityResult
+        val dir = vm.currentDir
+        val name = "Scansione_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.ITALY).format(Date()) + ".pdf"
+        Thread {
+            runCatching {
+                contentResolver.openInputStream(uri)!!.use { i -> File(dir, name).outputStream().use { o -> i.copyTo(o) } }
+            }.onFailure { runOnUiThread { vm.message = "Salvataggio scansione fallito: ${it.message}" } }
+            runOnUiThread { vm.refresh(); if (vm.message == null) vm.message = "Salvato $name" }
+        }.start()
+    }
+
+    private fun scanDocument() {
+        val opts = GmsDocumentScannerOptions.Builder()
+            .setGalleryImportAllowed(true)
+            .setPageLimit(20)
+            .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_PDF)
+            .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
+            .build()
+        GmsDocumentScanning.getClient(opts).getStartScanIntent(this)
+            .addOnSuccessListener { scanLauncher.launch(IntentSenderRequest.Builder(it).build()) }
+            .addOnFailureListener { vm.message = "Scanner non disponibile: ${it.message}" }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -80,7 +133,7 @@ class MainActivity : FragmentActivity() {
     private fun Root() {
         var granted by remember { mutableStateOf(hasAccess()) }
         val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-        androidx.compose.runtime.DisposableEffect(owner) {
+        DisposableEffect(owner) {
             val obs = LifecycleEventObserver { _, e ->
                 if (e == Lifecycle.Event.ON_RESUME) { granted = hasAccess(); if (granted) vm.refresh() }
             }
@@ -99,15 +152,23 @@ class MainActivity : FragmentActivity() {
         var route by remember { mutableStateOf<Route>(Route.Files) }
         var compress by remember { mutableStateOf<List<File>?>(null) }
         var tagging by remember { mutableStateOf<List<File>?>(null) }
+        var linking by remember { mutableStateOf<File?>(null) }
+        var update by remember { mutableStateOf<Updater.Info?>(null) }
+
+        LaunchedEffect(Unit) {
+            update = withContext(Dispatchers.IO) { Updater.check() }?.takeIf { Updater.isNewer(it) }
+        }
 
         BackHandler(route != Route.Files || vm.currentDir != vm.root || vm.selection.isNotEmpty() || vm.searchResults != null) {
             if (route != Route.Files) route = Route.Files else vm.up()
         }
 
+        val openFile: (File) -> Unit = { f ->
+            if (hasInternalViewer(f.extension.lowercase())) route = Route.Viewer(f) else openExternal(this, f)
+        }
+
         val nav = Nav(
-            openFile = { f ->
-                if (hasInternalViewer(f.extension.lowercase())) route = Route.Viewer(f) else openExternal(this, f)
-            },
+            openFile = openFile,
             extractArchive = { route = Route.Archive(it) },
             compressSelection = { compress = it },
             openTrash = { route = Route.Trash },
@@ -117,25 +178,39 @@ class MainActivity : FragmentActivity() {
             openTags = { route = Route.Tags },
             openRules = { route = Route.Rules },
             openStats = { route = Route.Stats },
+            openDual = { route = Route.Dual },
+            openPdfTools = { route = Route.PdfTools },
+            openOcr = { route = Route.Ocr },
+            openRemote = { route = Route.Remote },
+            openCloud = { route = Route.Cloud },
+            openTerminal = { route = Route.Terminal },
+            scan = { route = Route.Files; scanDocument() },
+            linkFile = { linking = it },
+            installApks = { ApkInstaller.start(this, it); vm.clearSelection() },
         )
 
         when (val r = route) {
             Route.Files -> FileManagerScreen(vm, nav)
-            is Route.Viewer -> ViewerScreen(r.file, vm.items.filter { it.isDir.not() }.map { it.file }) { route = Route.Files }
+            is Route.Viewer -> ViewerScreen(r.file, vm.items.filter { !it.isDir }.map { it.file }) { route = Route.Files }
             is Route.Archive -> ArchiveScreen(r.file, { route = Route.Files }) { vm.refresh(); route = Route.Files }
             Route.Trash -> TrashScreen(vm) { route = Route.Files }
             Route.Storage -> StorageScreen(vm) { route = Route.Files }
-            Route.Tools -> ToolsScreen(vm, { route = Route.Files }) { route = Route.Vault }
+            Route.Tools -> ToolsScreen(vm, nav, { route = Route.Files }) { route = Route.Vault }
             Route.Vault -> VaultScreen(vm) { route = Route.Tools }
             Route.Tags -> TagsScreen(vm.store, { vm.open(it); route = Route.Files }) { route = Route.Files }
             Route.Rules -> RulesScreen(vm, vm.store) { route = Route.Files }
             Route.Stats -> StatsScreen(vm) { route = Route.Files }
+            Route.Dual -> DualPaneScreen(vm, openFile) { vm.refresh(); route = Route.Files }
+            Route.PdfTools -> PdfToolsScreen(vm) { route = Route.Files }
+            Route.Ocr -> OcrScreen(vm, openFile) { route = Route.Files }
+            Route.Remote -> RemoteScreen(vm, openFile) { route = Route.Files }
+            Route.Cloud -> CloudScreen(vm, openFile) { route = Route.Files }
+            Route.Terminal -> TerminalScreen(vm) { route = Route.Files }
         }
 
         tagging?.let { src ->
             TagDialog(vm.store, src, { tagging = null }) { tagging = null; vm.clearSelection() }
         }
-
         compress?.let { src ->
             CompressDialog(src, { compress = null }) { err ->
                 compress = null
@@ -144,6 +219,8 @@ class MainActivity : FragmentActivity() {
                 if (err != null) vm.message = err
             }
         }
+        linking?.let { f -> LinkDialog(f) { linking = null; vm.clearSelection() } }
+        update?.let { u -> UpdateDialog(u) { update = null } }
     }
 
     private fun requestAccess() {

@@ -71,7 +71,7 @@ import java.io.File
 
 /** True se l'app ha un viewer interno per l'estensione. */
 fun hasInternalViewer(ext: String) =
-    ext in IMAGE_EXT || ext in VIDEO_EXT || ext in AUDIO_EXT || ext in TEXT_EXT || ext == "pdf"
+    ext in IMAGE_EXT || ext in VIDEO_EXT || ext in AUDIO_EXT || ext in TEXT_EXT || ext == "pdf" || ext == "epub" || ext == "cbz" || ext == "cbr"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,6 +93,8 @@ fun ViewerScreen(file: File, siblings: List<File>, onBack: () -> Unit) {
                 ext in IMAGE_EXT -> ImageGallery(file, siblings.filter { it.extension.lowercase() in IMAGE_EXT })
                 ext in VIDEO_EXT || ext in AUDIO_EXT -> MediaPlayer(file)
                 ext == "pdf" -> PdfViewer(file)
+                ext == "epub" -> EpubReader(file)
+                ext == "cbz" || ext == "cbr" -> ComicReader(file)
                 ext == "csv" -> CsvViewer(file)
                 ext in TEXT_EXT -> TextEditor(file)
                 else -> LaunchedEffect(file) { openExternal(ctx, file); onBack() }

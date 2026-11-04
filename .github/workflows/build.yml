@@ -34,5 +34,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: Ultima build
+          name: Build ${{ github.run_number }}
           files: GestoreFile.apk
