@@ -73,7 +73,7 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
     fun selectAll() { selection = items.map { it.file }.toSet() }
     fun clearSelection() { selection = emptySet() }
 
-    fun setSort(s: SortMode) { sort = s; refresh() }
+    fun changeSort(s: SortMode) { sort = s; refresh() }
     fun toggleHidden() { showHidden = !showHidden; refresh() }
 
     fun copySelection() { clipboard = selection.toList(); clipMode = ClipMode.COPY; selection = emptySet() }

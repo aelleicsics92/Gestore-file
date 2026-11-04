@@ -126,10 +126,10 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                         IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, "Menu") }
                         DropdownMenu(menu, { menu = false }) {
                             DropdownMenuItem({ Text("Nuovo file") }, { menu = false; dlg = Dlg.NewFile })
-                            DropdownMenuItem({ Text("Ordina per nome") }, { menu = false; vm.setSort(SortMode.NAME) })
-                            DropdownMenuItem({ Text("Ordina per data") }, { menu = false; vm.setSort(SortMode.DATE) })
-                            DropdownMenuItem({ Text("Ordina per dimensione") }, { menu = false; vm.setSort(SortMode.SIZE) })
-                            DropdownMenuItem({ Text("Ordina per tipo") }, { menu = false; vm.setSort(SortMode.TYPE) })
+                            DropdownMenuItem({ Text("Ordina per nome") }, { menu = false; vm.changeSort(SortMode.NAME) })
+                            DropdownMenuItem({ Text("Ordina per data") }, { menu = false; vm.changeSort(SortMode.DATE) })
+                            DropdownMenuItem({ Text("Ordina per dimensione") }, { menu = false; vm.changeSort(SortMode.SIZE) })
+                            DropdownMenuItem({ Text("Ordina per tipo") }, { menu = false; vm.changeSort(SortMode.TYPE) })
                             DropdownMenuItem({ Text(if (vm.showHidden) "Nascondi file nascosti" else "Mostra file nascosti") }, { menu = false; vm.toggleHidden() })
                             DropdownMenuItem({ Text("Cestino") }, { menu = false; nav.openTrash() })
                             DropdownMenuItem({ Text("Analizzatore spazio") }, { menu = false; nav.openStorage() })
