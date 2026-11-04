@@ -200,7 +200,7 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                 val cur = indexAt(pointer)
                 if (cur < 0 || anchor < 0) return
                 val lo = minOf(anchor, cur); val hi = maxOf(anchor, cur)
-                vm.setSelection(base + list.subList(lo, (hi + 1).coerceAtMost(list.size)).map { it.file })
+                vm.replaceSelection(base + list.subList(lo, (hi + 1).coerceAtMost(list.size)).map { it.file })
             }
 
             // Autoscroll ai bordi durante il trascinamento
@@ -227,7 +227,7 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                             base = vm.selection
                             if (anchor in list.indices) {
                                 val f = list[anchor].file
-                                vm.setSelection(base + f)
+                                vm.replaceSelection(base + f)
                                 dragging = true
                             }
                         },

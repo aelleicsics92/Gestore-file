@@ -94,7 +94,7 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun selectAll() { selection = items.map { it.file }.toSet() }
-    fun setSelection(s: Set<File>) { selection = s }
+    fun replaceSelection(s: Set<File>) { selection = s }
     fun clearSelection() { selection = emptySet() }
 
     fun changeSort(s: SortMode) { sort = s; cache.clear(); refresh() }
