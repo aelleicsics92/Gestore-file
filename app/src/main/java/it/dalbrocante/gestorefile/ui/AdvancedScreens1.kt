@@ -22,6 +22,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -66,12 +67,12 @@ private fun Pane(
         }
         LazyColumn(Modifier.fillMaxSize()) {
             if (dir != vm.root && dir.parentFile != null) {
-                item { ListItem(headlineContent = { Text("..") }, modifier = Modifier.clickable { onFocus(); onDir(dir.parentFile!!) }) }
+                item { CardListItem(headlineContent = { Text("..") }, modifier = Modifier.clickable { onFocus(); onDir(dir.parentFile!!) }) }
             }
             items(items, key = { it.file.absolutePath }) { it ->
                 val sel = it.file in selected
-                ListItem(
-                    colors = ListItemDefaults.colors(containerColor = if (sel) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface),
+                CardListItem(
+                    colors = ListItemDefaults.colors(containerColor = if (sel) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent),
                     leadingContent = { Icon(if (it.isDir) Icons.Default.Folder else Icons.Default.InsertDriveFile, null) },
                     headlineContent = { Text(it.name, maxLines = 1) },
                     supportingContent = { if (!it.isDir) Text(formatSize(it.size)) },
@@ -269,7 +270,7 @@ fun OcrScreen(vm: FileViewModel, onOpenFile: (File) -> Unit, onBack: () -> Unit)
                 if (r.isEmpty()) Text("Nessun risultato")
                 LazyColumn {
                     items(r, key = { it.absolutePath }) { f ->
-                        ListItem(
+                        CardListItem(
                             headlineContent = { Text(f.name, maxLines = 1) },
                             supportingContent = { Text(f.parent ?: "") },
                             modifier = Modifier.clickable { onOpenFile(f) },

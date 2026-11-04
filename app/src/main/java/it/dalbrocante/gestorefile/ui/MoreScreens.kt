@@ -50,16 +50,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun Page(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
-    Scaffold(topBar = {
-        TopAppBar(
-            title = { Text(title) },
-            navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Indietro") } },
-        )
-    }) { pad -> Box(Modifier.padding(pad).fillMaxSize()) { content() } }
-}
+private fun Page(title: String, onBack: () -> Unit, content: @Composable () -> Unit) = Page2(title, onBack, content = content)
 
 /** Dialog per assegnare un tag ai file selezionati (suggerisce i tag esistenti). */
 @Composable
@@ -98,7 +90,7 @@ fun TagsScreen(store: Store, onOpenFolder: (File) -> Unit, onBack: () -> Unit) {
                 }
             }
             items(files, key = { it.absolutePath }) { f ->
-                ListItem(
+                CardListItem(
                     headlineContent = { Text(f.name, maxLines = 1) },
                     supportingContent = { Text(f.parent ?: "") },
                     trailingContent = {
@@ -148,7 +140,7 @@ fun RulesScreen(vm: FileViewModel, store: Store, onBack: () -> Unit) {
                 Button(add) { Text("Aggiungi regola") }
             }
             items(rules) { r ->
-                ListItem(
+                CardListItem(
                     headlineContent = { Text("${r.exts.joinToString(", ")}  →  ${r.target.name}") },
                     supportingContent = { Text(r.watch.absolutePath) },
                     trailingContent = {

@@ -21,6 +21,8 @@ data class SearchFilter(
     val modifiedAfter: Long = 0L,
 )
 
+data class TrashEntry(val file: File, val name: String, val deletedAt: Long, val size: Long, val isDir: Boolean, val daysLeft: Int)
+
 class FileRepository(private val trashDir: File) {
 
     init {
@@ -28,18 +30,22 @@ class FileRepository(private val trashDir: File) {
         purgeTrash()
     }
 
+    private fun statItem(f: File): FileItem {
+        val a = try {
+            java.nio.file.Files.readAttributes(f.toPath(), java.nio.file.attribute.BasicFileAttributes::class.java)
+        } catch (e: Exception) { null }
+        return if (a != null) {
+            FileItem(f, f.name, a.isDirectory, if (a.isDirectory) 0L else a.size(), a.lastModifiedTime().toMillis(), f.name.substringAfterLast('.', "").lowercase())
+        } else FileItem(f)
+    }
+
+    /** Elenco cartella: le letture degli attributi (lente su storage FUSE) sono eseguite in parallelo. */
     fun list(dir: File, sort: SortMode = SortMode.NAME, showHidden: Boolean = false): List<FileItem> {
         val files = dir.listFiles() ?: return emptyList()
-        val items = ArrayList<FileItem>(files.size)
-        for (f in files) {
-            if (!showHidden && f.name.startsWith(".")) continue
-            val a = try {
-                java.nio.file.Files.readAttributes(f.toPath(), java.nio.file.attribute.BasicFileAttributes::class.java)
-            } catch (e: Exception) { null }
-            items += if (a != null) {
-                FileItem(f, f.name, a.isDirectory, if (a.isDirectory) 0L else a.size(), a.lastModifiedTime().toMillis(), f.name.substringAfterLast('.', "").lowercase())
-            } else FileItem(f)
-        }
+        val visible = if (showHidden) files.asList() else files.filter { !it.name.startsWith(".") }
+        val items: MutableList<FileItem> =
+            if (visible.size < 200) visible.mapTo(ArrayList(visible.size)) { statItem(it) }
+            else visible.parallelStream().map { statItem(it) }.collect(java.util.stream.Collectors.toList())
         val byName = compareBy<FileItem, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
         val cmp: Comparator<FileItem> = when (sort) {
             SortMode.NAME -> byName
@@ -121,6 +127,24 @@ class FileRepository(private val trashDir: File) {
         check(item.renameTo(target)) { "Ripristino fallito" }
         origin.delete()
         target
+    }
+
+    fun trashEntries(retentionDays: Int = 30): List<TrashEntry> {
+        val now = System.currentTimeMillis()
+        return (trashDir.listFiles() ?: emptyArray()).filter { !it.name.endsWith(".origin") }.map { f ->
+            val stamp = f.name.substringBefore("__").toLongOrNull() ?: f.lastModified()
+            val left = (retentionDays - TimeUnit.MILLISECONDS.toDays(now - stamp)).toInt().coerceAtLeast(0)
+            val size = if (f.isDirectory) f.walkTopDown().filter { it.isFile }.sumOf { it.length() } else f.length()
+            TrashEntry(f, f.name.substringAfter("__"), stamp, size, f.isDirectory, left)
+        }.sortedByDescending { it.deletedAt }
+    }
+
+    /** Spazio esatto occupato dal cestino (file + cartelle). */
+    fun trashSize(): Long = trashEntries().sumOf { it.size }
+
+    fun deleteFromTrash(item: File) {
+        File(trashDir, item.name + ".origin").delete()
+        item.deleteRecursively()
     }
 
     fun emptyTrash() {

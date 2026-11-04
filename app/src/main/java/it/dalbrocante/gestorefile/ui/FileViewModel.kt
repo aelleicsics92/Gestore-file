@@ -48,6 +48,12 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
     var loading by mutableStateOf(false)
         private set
     private var listJob: Job? = null
+    private val cache = LinkedHashMap<String, List<FileItem>>()
+    private val prefs = app.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+    var gridMode by mutableStateOf(prefs.getBoolean("grid", false))
+        private set
+
+    fun toggleGrid() { gridMode = !gridMode; prefs.edit().putBoolean("grid", gridMode).apply() }
 
     init { refresh() }
 
@@ -58,6 +64,8 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
         listJob = viewModelScope.launch {
             loading = true
             val r = withContext(Dispatchers.IO) { repo.list(dir, s, h) }
+            cache.remove(dir.path); cache[dir.path] = r
+            while (cache.size > 12) cache.remove(cache.keys.first())
             if (dir == currentDir) items = r
             loading = false
         }
@@ -66,7 +74,7 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
     fun open(dir: File) {
         if (!dir.isDirectory) return
         currentDir = dir
-        items = emptyList()
+        items = cache[dir.path] ?: emptyList()
         selection = emptySet()
         searchResults = null
         refresh()
@@ -86,10 +94,11 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun selectAll() { selection = items.map { it.file }.toSet() }
+    fun setSelection(s: Set<File>) { selection = s }
     fun clearSelection() { selection = emptySet() }
 
-    fun changeSort(s: SortMode) { sort = s; refresh() }
-    fun toggleHidden() { showHidden = !showHidden; refresh() }
+    fun changeSort(s: SortMode) { sort = s; cache.clear(); refresh() }
+    fun toggleHidden() { showHidden = !showHidden; cache.clear(); refresh() }
 
     fun copySelection() { clipboard = selection.toList(); clipMode = ClipMode.COPY; selection = emptySet() }
     fun cutSelection() { clipboard = selection.toList(); clipMode = ClipMode.CUT; selection = emptySet() }

@@ -92,20 +92,20 @@ object Thumbs {
 }
 
 @Composable
-fun FileThumb(item: FileItem, modifier: Modifier = Modifier, size: Dp = 56.dp) {
+fun FileThumb(item: FileItem, modifier: Modifier = Modifier, size: Dp = 56.dp, fill: Boolean = false) {
     val ctx = LocalContext.current
     val kind = remember(item.ext, item.isDir) { kindOf(item.ext, item.isDir) }
     val isVideo = !item.isDir && item.ext in VIDEO_EXT
     val hasPreview = !item.isDir && (item.ext in IMAGE_EXT || isVideo)
     Box(
-        modifier.size(size).clip(RoundedCornerShape(16.dp)).background(kind.color.copy(alpha = 0.14f)),
+        (if (fill) modifier else modifier.size(size)).clip(RoundedCornerShape(if (fill) 0.dp else 16.dp)).background(kind.color.copy(alpha = 0.14f)),
         contentAlignment = Alignment.Center,
     ) {
         // L'icona resta sotto: è il segnaposto finché la miniatura non è pronta
         if (item.ext.isNotEmpty() && !item.isDir && kind.label == "Altro") {
             Text(item.ext.take(4).uppercase(), color = kind.color, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         } else {
-            Icon(kind.icon, null, tint = kind.color, modifier = Modifier.size(size * 0.5f))
+            Icon(kind.icon, null, tint = kind.color, modifier = Modifier.size(if (fill) 40.dp else size * 0.5f))
         }
         if (hasPreview) {
             val req = remember(item.file.absolutePath, item.modified) {
@@ -229,3 +229,42 @@ val ChartPalette = listOf(
     Color(0xFF5B4BDB), Color(0xFF0EA5E9), Color(0xFF2FA866), Color(0xFFFFB020),
     Color(0xFFE5484D), Color(0xFFEC4899), Color(0xFF14B8A6), Color(0xFFFB7A3D),
 )
+
+
+/** Card standard dell'app: stessi bordi arrotondati, padding e colore ovunque. */
+@Composable
+fun CardItem(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    content: @Composable RowScope.() -> Unit,
+) {
+    val colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    val inner: @Composable ColumnScope.() -> Unit = {
+        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, content = content)
+    }
+    if (onClick != null) ElevatedCard(onClick, modifier, shape = RoundedCornerShape(20.dp), colors = colors, content = inner)
+    else ElevatedCard(modifier, shape = RoundedCornerShape(20.dp), colors = colors, content = inner)
+}
+
+
+/** ListItem con lo stesso aspetto delle card dell'app (bordi arrotondati, padding uniforme). */
+@Composable
+fun CardListItem(
+    headlineContent: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    supportingContent: (@Composable () -> Unit)? = null,
+    leadingContent: (@Composable () -> Unit)? = null,
+    trailingContent: (@Composable () -> Unit)? = null,
+    colors: ListItemColors? = null,
+) {
+    Surface(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp),
+        shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerLow, tonalElevation = 1.dp,
+    ) {
+        ListItem(
+            headlineContent = headlineContent, modifier = modifier, supportingContent = supportingContent,
+            leadingContent = leadingContent, trailingContent = trailingContent,
+            colors = colors ?: ListItemDefaults.colors(containerColor = Color.Transparent),
+        )
+    }
+}

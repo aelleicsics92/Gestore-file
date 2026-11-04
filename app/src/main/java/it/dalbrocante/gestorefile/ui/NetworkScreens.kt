@@ -117,7 +117,7 @@ fun RemoteScreen(vm: FileViewModel, onOpenFile: (File) -> Unit, onBack: () -> Un
             } else {
                 LazyColumn {
                     items(entries, key = { it.path }) { e ->
-                        ListItem(
+                        CardListItem(
                             leadingContent = { Icon(if (e.isDir) Icons.Default.Folder else Icons.Default.InsertDriveFile, null) },
                             headlineContent = { Text(e.name, maxLines = 1) },
                             supportingContent = { if (!e.isDir) Text(formatSize(e.size)) },
@@ -203,7 +203,7 @@ fun CloudScreen(vm: FileViewModel, onOpenFile: (File) -> Unit, onBack: () -> Uni
                 }
                 LazyColumn {
                     items(roots, key = { it.toString() }) { u ->
-                        ListItem(
+                        CardListItem(
                             leadingContent = { Icon(Icons.Default.Folder, null) },
                             headlineContent = { Text(Uri.decode(u.lastPathSegment ?: u.toString()), maxLines = 1) },
                             supportingContent = { Text(u.authority ?: "") },
@@ -215,7 +215,7 @@ fun CloudScreen(vm: FileViewModel, onOpenFile: (File) -> Unit, onBack: () -> Uni
                 val children = remember(stack) { cur.children() }
                 LazyColumn {
                     items(children, key = { it.uri.toString() }) { d ->
-                        ListItem(
+                        CardListItem(
                             leadingContent = { Icon(if (d.isDirectory) Icons.Default.Folder else Icons.Default.InsertDriveFile, null) },
                             headlineContent = { Text(d.name ?: "?", maxLines = 1) },
                             supportingContent = { if (d.isFile) Text(formatSize(d.length())) },

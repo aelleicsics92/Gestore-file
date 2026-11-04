@@ -192,15 +192,18 @@ class MainActivity : FragmentActivity() {
 
         when (val r = route) {
             Route.Files -> FileManagerScreen(vm, nav)
-            is Route.Viewer -> ViewerScreen(r.file, vm.items.filter { !it.isDir }.map { it.file }) { route = Route.Files }
+            is Route.Viewer -> ViewerScreen(
+                r.file,
+                if (r.file.parentFile == vm.currentDir && vm.searchResults == null) vm.items.filter { !it.isDir }.map { it.file } else null,
+            ) { route = Route.Files }
             is Route.Archive -> ArchiveScreen(r.file, { route = Route.Files }) { vm.refresh(); route = Route.Files }
             Route.Trash -> TrashScreen(vm) { route = Route.Files }
-            Route.Storage -> StorageScreen(vm) { route = Route.Files }
+            Route.Storage -> StorageScreen(vm, { route = Route.Files }, openFile)
             Route.Tools -> ToolsScreen(vm, nav, { route = Route.Files }) { route = Route.Vault }
             Route.Vault -> VaultScreen(vm) { route = Route.Tools }
             Route.Tags -> TagsScreen(vm.store, { vm.open(it); route = Route.Files }) { route = Route.Files }
             Route.Rules -> RulesScreen(vm, vm.store) { route = Route.Files }
-            Route.Stats -> StatsScreen(vm) { route = Route.Files }
+            Route.Stats -> StatsScreen(vm, { route = Route.Files }, openFile)
             Route.Dual -> DualPaneScreen(vm, openFile) { vm.refresh(); route = Route.Files }
             Route.PdfTools -> PdfToolsScreen(vm) { route = Route.Files }
             Route.Ocr -> OcrScreen(vm, openFile) { route = Route.Files }

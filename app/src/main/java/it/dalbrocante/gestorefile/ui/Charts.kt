@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,7 +49,7 @@ private fun LegendCard(color: Color, title: String, subtitle: String, trailing: 
 }
 
 @Composable
-private fun FileRowCompact(file: File, onClick: () -> Unit) {
+private fun FileRowCompact(file: File, onClick: () -> Unit, onFolder: () -> Unit) {
     ElevatedCard(
         onClick = onClick, shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
@@ -61,6 +62,7 @@ private fun FileRowCompact(file: File, onClick: () -> Unit) {
                 Text(file.parent ?: "", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(formatSize(if (file.isFile) file.length() else 0L), style = MaterialTheme.typography.labelLarge)
+            IconButton(onFolder) { Icon(androidx.compose.material.icons.Icons.Filled.FolderOpen, "Apri cartella") }
         }
     }
 }
@@ -84,7 +86,7 @@ private fun computeCats(root: File): List<Cat> {
 }
 
 @Composable
-fun StatsScreen(vm: FileViewModel, onBack: () -> Unit) {
+fun StatsScreen(vm: FileViewModel, onBack: () -> Unit, onOpenFile: (File) -> Unit) {
     var cats by remember { mutableStateOf<List<Cat>?>(null) }
     var selected by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(vm.currentDir) {
@@ -122,7 +124,7 @@ fun StatsScreen(vm: FileViewModel, onBack: () -> Unit) {
                     val cat = c[s]
                     item { SectionHeader("File più grandi: ${cat.kind.label}") }
                     items(cat.top, key = { it.absolutePath }) { f ->
-                        FileRowCompact(f) { f.parentFile?.let { vm.open(it) }; onBack() }
+                        FileRowCompact(f, { onOpenFile(f) }) { f.parentFile?.let { vm.open(it) }; onBack() }
                     }
                 }
             }
@@ -133,7 +135,7 @@ fun StatsScreen(vm: FileViewModel, onBack: () -> Unit) {
 // ---------- Analizzatore spazio ----------
 
 @Composable
-fun StorageScreen(vm: FileViewModel, onBack: () -> Unit) {
+fun StorageScreen(vm: FileViewModel, onBack: () -> Unit, onOpenFile: (File) -> Unit) {
     var usage by remember { mutableStateOf<List<Pair<File?, Long>>?>(null) }
     var selected by remember { mutableStateOf<Int?>(null) }
     var big by remember { mutableStateOf<List<File>>(emptyList()) }
@@ -204,7 +206,7 @@ fun StorageScreen(vm: FileViewModel, onBack: () -> Unit) {
                     }
                     if (big.isNotEmpty()) {
                         item { SectionHeader("File più grandi") }
-                        items(big, key = { it.absolutePath }) { b -> FileRowCompact(b) { b.parentFile?.let { vm.open(it) }; onBack() } }
+                        items(big, key = { it.absolutePath }) { b -> FileRowCompact(b, { onOpenFile(b) }) { b.parentFile?.let { vm.open(it) }; onBack() } }
                     }
                 }
             }

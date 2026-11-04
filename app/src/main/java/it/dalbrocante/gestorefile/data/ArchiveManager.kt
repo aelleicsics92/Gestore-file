@@ -60,18 +60,34 @@ object ArchiveManager {
         else -> listOf(ArchiveEntryInfo(f.nameWithoutExtension, false, f.length()))
     }
 
-    /** Estrae tutto in dest. */
-    fun extract(f: File, dest: File, password: String? = null, onlyEntry: String? = null) {
+    /** True se la voce appartiene a onlyEntry (file esatto oppure contenuto di una cartella). */
+    private fun hit(name: String, only: String?): Boolean {
+        if (only == null) return true
+        val o = only.trimEnd('/')
+        val n = name.trimEnd('/')
+        return n == o || n.startsWith("$o/")
+    }
+
+    /** Nome di uscita: con flat, un singolo file viene estratto direttamente in dest (senza sottocartelle). */
+    private fun outName(name: String, only: String?, flat: Boolean) =
+        if (flat && only != null && name == only) name.substringAfterLast('/') else name
+
+    /** Estrae tutto (o una singola voce / cartella) in dest, senza decomprimere il resto dell'archivio. */
+    fun extract(f: File, dest: File, password: String? = null, onlyEntry: String? = null, flat: Boolean = false) {
         dest.mkdirs()
         when (kind(f)) {
-            "zip" -> ZipFile(f, password?.toCharArray()).let {
-                if (onlyEntry == null) it.extractAll(dest.absolutePath) else it.extractFile(onlyEntry, dest.absolutePath)
+            "zip" -> ZipFile(f, password?.toCharArray()).let { z ->
+                if (onlyEntry == null) z.extractAll(dest.absolutePath)
+                else z.fileHeaders.filter { hit(it.fileName, onlyEntry) }.forEach { h ->
+                    val nn = outName(h.fileName, onlyEntry, flat)
+                    if (nn != h.fileName) z.extractFile(h, dest.absolutePath, nn) else z.extractFile(h, dest.absolutePath)
+                }
             }
             "rar" -> Archive(f, password).use { a ->
                 for (h in a.fileHeaders) {
                     val name = h.fileName.replace('\\', '/')
-                    if (onlyEntry != null && name != onlyEntry) continue
-                    val out = safeChild(dest, name)
+                    if (!hit(name, onlyEntry)) continue
+                    val out = safeChild(dest, outName(name, onlyEntry, flat))
                     if (h.isDirectory) out.mkdirs() else {
                         out.parentFile?.mkdirs()
                         out.outputStream().use { a.extractFile(h, it) }
@@ -81,8 +97,8 @@ object ArchiveManager {
             "7z" -> SevenZFile.builder().setFile(f).apply { password?.let { setPassword(it.toCharArray()) } }.get().use { s ->
                 var e = s.nextEntry
                 while (e != null) {
-                    if (onlyEntry == null || e.name == onlyEntry) {
-                        val out = safeChild(dest, e.name)
+                    if (hit(e.name, onlyEntry)) {
+                        val out = safeChild(dest, outName(e.name, onlyEntry, flat))
                         if (e.isDirectory) out.mkdirs() else {
                             out.parentFile?.mkdirs()
                             out.outputStream().use { o ->
@@ -98,8 +114,8 @@ object ArchiveManager {
             "tar", "tgz", "tbz2", "txz" -> tarStream(f).use { ais ->
                 var e = ais.nextEntry
                 while (e != null) {
-                    if (onlyEntry == null || e.name == onlyEntry) {
-                        val out = safeChild(dest, e.name)
+                    if (hit(e.name, onlyEntry)) {
+                        val out = safeChild(dest, outName(e.name, onlyEntry, flat))
                         if (e.isDirectory) out.mkdirs() else {
                             out.parentFile?.mkdirs()
                             out.outputStream().use { ais.copyTo(it) }

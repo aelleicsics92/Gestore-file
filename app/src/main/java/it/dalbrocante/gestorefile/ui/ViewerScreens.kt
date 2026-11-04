@@ -75,9 +75,18 @@ fun hasInternalViewer(ext: String) =
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ViewerScreen(file: File, siblings: List<File>, onBack: () -> Unit) {
+fun ViewerScreen(file: File, siblings: List<File>?, onBack: () -> Unit) {
     val ctx = LocalContext.current
     val ext = file.extension.lowercase()
+    val sibs by produceState<List<File>?>(siblings, file) {
+        if (siblings == null && file.extension.lowercase() in IMAGE_EXT) {
+            value = withContext(Dispatchers.IO) {
+                file.parentFile?.listFiles()?.filter { it.isFile && it.extension.lowercase() in IMAGE_EXT }
+                    ?.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+            }
+        }
+    }
+    val gallery = remember(sibs, ext) { sibs?.filter { it.extension.lowercase() in IMAGE_EXT }?.ifEmpty { null } ?: listOf(file) }
     Scaffold(topBar = {
         TopAppBar(
             title = { Text(file.name, maxLines = 1) },
@@ -90,7 +99,7 @@ fun ViewerScreen(file: File, siblings: List<File>, onBack: () -> Unit) {
     }) { pad ->
         Box(Modifier.padding(pad).fillMaxSize()) {
             when {
-                ext in IMAGE_EXT -> ImageGallery(file, siblings.filter { it.extension.lowercase() in IMAGE_EXT })
+                ext in IMAGE_EXT -> ImageGallery(file, gallery)
                 ext in VIDEO_EXT || ext in AUDIO_EXT -> MediaPlayer(file)
                 ext == "pdf" -> PdfViewer(file)
                 ext == "epub" -> EpubReader(file)
@@ -145,7 +154,15 @@ private fun ImageGallery(start: File, images: List<File>) {
 @Composable
 private fun MediaPlayer(file: File) {
     val ctx = LocalContext.current
-    val player = remember { ExoPlayer.Builder(ctx).build().apply { setMediaItem(MediaItem.fromUri(android.net.Uri.fromFile(file))); prepare(); playWhenReady = true } }
+    val player = remember {
+        ExoPlayer.Builder(ctx).build().apply {
+            addListener(object : androidx.media3.common.Player.Listener {
+                // Se il formato non è supportato dal player integrato, passa a quello di sistema
+                override fun onPlayerError(error: androidx.media3.common.PlaybackException) { openExternal(ctx, file) }
+            })
+            setMediaItem(MediaItem.fromUri(android.net.Uri.fromFile(file))); prepare(); playWhenReady = true
+        }
+    }
     DisposableEffect(Unit) { onDispose { player.release() } }
     AndroidView({ PlayerView(it).apply { this.player = player; useController = true } }, Modifier.fillMaxSize())
 }

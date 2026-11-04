@@ -2,6 +2,15 @@ package it.dalbrocante.gestorefile.ui
 
 import android.os.Environment
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -88,17 +97,37 @@ fun FolderPickerDialog(start: File, onDismiss: () -> Unit, onPick: (File) -> Uni
     }
 }
 
+private data class VEntry(val path: String, val name: String, val isDir: Boolean, val size: Long)
+
+/** Contenuto della "cartella virtuale" prefix; le cartelle implicite (senza voce esplicita) sono ricostruite dai percorsi. */
+private fun childrenOf(all: List<ArchiveEntryInfo>, prefix: String): List<VEntry> {
+    val out = LinkedHashMap<String, VEntry>()
+    for (e in all) {
+        val p = e.path.trimStart('/').trimEnd('/')
+        if (p.isEmpty() || !p.startsWith(prefix) || p == prefix.trimEnd('/')) continue
+        val rest = p.removePrefix(prefix)
+        val first = rest.substringBefore('/')
+        val dir = e.isDir || rest.contains('/')
+        val path = if (dir) prefix + first + "/" else p
+        if (path !in out) out[path] = VEntry(path, first, dir, if (dir) 0L else e.size)
+    }
+    return out.values.sortedWith(compareByDescending<VEntry> { it.isDir }.thenBy { it.name.lowercase() })
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArchiveScreen(archive: File, onBack: () -> Unit, onDone: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     var password by remember { mutableStateOf("") }
     var entries by remember { mutableStateOf<List<ArchiveEntryInfo>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var needPassword by remember { mutableStateOf(false) }
-    var pickFor by remember { mutableStateOf<String?>(null) } // "" = tutto, altrimenti nome voce
+    var pickFor by remember { mutableStateOf<String?>(null) } // "" = tutto, altrimenti voce o cartella
     var cwd by remember { mutableStateOf("") }
+    var viewing by remember { mutableStateOf<File?>(null) }
+    var menuFor by remember { mutableStateOf<VEntry?>(null) }
 
     fun load() {
         scope.launch {
@@ -115,12 +144,38 @@ fun ArchiveScreen(archive: File, onBack: () -> Unit, onDone: () -> Unit) {
         scope.launch {
             busy = true
             val r = withContext(Dispatchers.IO) {
-                runCatching { ArchiveManager.extract(archive, dest, password.ifEmpty { null }, entry) }
+                runCatching { ArchiveManager.extract(archive, dest, password.ifEmpty { null }, entry, flat = true) }
             }
             busy = false
             r.onSuccess { onDone() }.onFailure { error = it.message }
         }
     }
+
+    /** Estrae SOLO la voce scelta in cache e la apre (viewer interno o app di sistema). */
+    fun preview(e: VEntry) {
+        scope.launch {
+            busy = true; error = null
+            val r = withContext(Dispatchers.IO) {
+                runCatching {
+                    val dir = File(ctx.cacheDir, "archive_preview").apply { deleteRecursively(); mkdirs() }
+                    ArchiveManager.extract(archive, dir, password.ifEmpty { null }, e.path, flat = true)
+                    File(dir, e.name).also { require(it.exists()) { "Estrazione fallita" } }
+                }
+            }
+            busy = false
+            r.onSuccess { f ->
+                if (hasInternalViewer(f.extension.lowercase())) viewing = f
+                else it.dalbrocante.gestorefile.util.openExternal(ctx, f)
+            }.onFailure { error = it.message }
+        }
+    }
+
+    androidx.activity.compose.BackHandler(viewing != null) { viewing = null }
+    androidx.activity.compose.BackHandler(viewing == null && cwd.isNotEmpty()) {
+        cwd = cwd.trimEnd('/').substringBeforeLast('/', "").let { if (it.isEmpty()) "" else "$it/" }
+    }
+
+    viewing?.let { f -> ViewerScreen(f, null) { viewing = null }; return }
 
     Scaffold(topBar = {
         TopAppBar(
@@ -139,31 +194,40 @@ fun ArchiveScreen(archive: File, onBack: () -> Unit, onDone: () -> Unit) {
                 }
             } else {
                 Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button({ extract(null, archive.parentFile!!) }) { Text("Estrai qui") }
+                    Button({ extract(null, archive.parentFile!!) }) { Text("Estrai tutto qui") }
                     OutlinedButton({ pickFor = "" }) { Text("Estrai in...") }
                 }
-                val prefix = cwd
-                val visible = (entries ?: emptyList()).filter { e ->
-                    val p = e.path.trimEnd('/')
-                    p.startsWith(prefix) && p != prefix.trimEnd('/') && !p.removePrefix(prefix).contains('/')
-                }
-                LazyColumn {
-                    if (cwd.isNotEmpty()) {
-                        item {
-                            ListItem(headlineContent = { Text("..") }, modifier = Modifier.clickable {
-                                cwd = cwd.trimEnd('/').substringBeforeLast('/', "").let { if (it.isEmpty()) "" else "$it/" }
-                            })
-                        }
-                    }
-                    items(visible, key = { it.path }) { e ->
-                        ListItem(
-                            leadingContent = { Icon(if (e.isDir) Icons.Default.Folder else Icons.Default.InsertDriveFile, null) },
-                            headlineContent = { Text(e.path.trimEnd('/').substringAfterLast('/')) },
-                            supportingContent = { if (!e.isDir) Text(formatSize(e.size)) },
-                            modifier = Modifier.clickable {
-                                if (e.isDir) cwd = e.path.trimEnd('/') + "/" else pickFor = e.path
-                            },
+                // Percorso virtuale cliccabile
+                Row(
+                    Modifier.padding(horizontal = 12.dp).horizontalScroll(rememberScrollState()),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                ) {
+                    val segs = cwd.trimEnd('/').split('/').filter { it.isNotEmpty() }
+                    androidx.compose.material3.AssistChip({ cwd = "" }, { Text(archive.name, maxLines = 1) }, shape = RoundedCornerShape(14.dp))
+                    segs.forEachIndexed { i, sg ->
+                        Icon(Icons.Default.ChevronRight, null, Modifier.size(16.dp))
+                        androidx.compose.material3.AssistChip(
+                            { cwd = segs.take(i + 1).joinToString("/") + "/" }, { Text(sg, maxLines = 1) }, shape = RoundedCornerShape(14.dp),
                         )
+                    }
+                }
+                val visible = remember(entries, cwd) { childrenOf(entries ?: emptyList(), cwd) }
+                LazyColumn(
+                    contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 32.dp), verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(visible, key = { it.path }) { e ->
+                        CardItem(onClick = { if (e.isDir) cwd = e.path else preview(e) }) {
+                            FileThumb(
+                                it.dalbrocante.gestorefile.data.FileItem(File(e.name), e.name, e.isDir, e.size, 0L, e.name.substringAfterLast('.', "").lowercase()),
+                                size = 44.dp,
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(e.name, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                                Text(if (e.isDir) "Cartella" else formatSize(e.size), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                            }
+                            IconButton({ pickFor = e.path }) { Icon(Icons.Default.Unarchive, "Estrai solo questo") }
+                        }
                     }
                 }
             }

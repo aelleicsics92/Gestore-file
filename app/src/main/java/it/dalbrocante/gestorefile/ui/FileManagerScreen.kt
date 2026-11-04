@@ -11,6 +11,22 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.ScrollableState
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.ContentScale
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -90,12 +106,22 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
         snackbarHost = { SnackbarHost(snack) },
         topBar = {
             if (inSelection) {
-                TopAppBar(
-                    title = { Text("${sel.size} selezionati", fontWeight = FontWeight.SemiBold) },
-                    navigationIcon = { IconButton({ vm.clearSelection() }) { Icon(Icons.Filled.Close, "Annulla selezione") } },
-                    actions = { IconButton({ vm.selectAll() }) { Icon(Icons.Filled.SelectAll, "Seleziona tutto") } },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-                )
+                Surface(
+                    Modifier.statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp).fillMaxWidth(),
+                    shape = RoundedCornerShape(32.dp), tonalElevation = 8.dp, shadowElevation = 12.dp,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                ) {
+                    Row(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        BarAction(Icons.Filled.Close, "Annulla selezione") { vm.clearSelection() }
+                        Text("${sel.size}", Modifier.weight(1f).padding(start = 2.dp), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        BarAction(Icons.Filled.DriveFileMove, "Sposta") { vm.cutSelection() }
+                        BarAction(Icons.Filled.ContentCopy, "Copia") { vm.copySelection() }
+                        BarAction(Icons.Filled.Share, "Condividi") { shareFiles(ctx, sel.toList()) }
+                        BarAction(Icons.Filled.FolderZip, "Comprimi in ZIP") { nav.compressSelection(sel.toList()) }
+                        BarAction(Icons.Filled.Delete, "Elimina", tint = MaterialTheme.colorScheme.error) { dlg = Dlg.TrashConfirm }
+                        BarAction(Icons.Filled.MoreVert, "Altro") { sheet = Sheet.MORE }
+                    }
+                }
             } else {
                 Column(Modifier.statusBarsPadding().padding(horizontal = 20.dp, vertical = 8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -110,6 +136,10 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                             )
                         }
                         FilledTonalIconButton({ dlg = Dlg.Search }) { Icon(Icons.Filled.Search, "Cerca") }
+                        Spacer(Modifier.width(8.dp))
+                        FilledTonalIconButton({ vm.toggleGrid() }) {
+                            Icon(if (vm.gridMode) Icons.Filled.ViewList else Icons.Filled.GridView, "Cambia vista")
+                        }
                         Spacer(Modifier.width(8.dp))
                         FilledTonalIconButton({ sheet = Sheet.MENU }) { Icon(Icons.Filled.Tune, "Menu") }
                     }
@@ -130,25 +160,111 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                 }
             }
 
-            LazyColumn(
-                Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 140.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(list, key = { it.file.absolutePath }, contentType = { if (it.isDir) 0 else 1 }) { item ->
-                    val selected = item.file in sel
-                    FileCard(
-                        item, selected, inSelection,
-                        onClick = {
-                            when {
-                                inSelection -> vm.toggleSelect(item.file)
-                                item.isDir -> vm.open(item.file)
-                                item.ext in ARCHIVE_EXT && item.ext != "cbz" && item.ext != "cbr" -> nav.extractArchive(item.file)
-                                else -> nav.openFile(item.file)
+            val listState = rememberLazyListState()
+            val gridState = rememberLazyGridState()
+            val density = LocalDensity.current
+            val padPx = with(density) { 16.dp.toPx() }
+            var dragging by remember { mutableStateOf(false) }
+            var pointer by remember { mutableStateOf(Offset.Zero) }
+            var viewH by remember { mutableStateOf(0) }
+            var anchor by remember { mutableStateOf(-1) }
+            var base by remember { mutableStateOf<Set<File>>(emptySet()) }
+            val grid = vm.gridMode
+            val scrollState: ScrollableState = if (grid) gridState else listState
+
+            fun indexAt(p: Offset): Int {
+                var best = -1; var bestD = Float.MAX_VALUE
+                if (grid) {
+                    val info = gridState.layoutInfo
+                    val y = p.y - info.beforeContentPadding; val x = p.x - padPx
+                    info.visibleItemsInfo.forEach {
+                        val cx = it.offset.x + it.size.width / 2f; val cy = it.offset.y + it.size.height / 2f
+                        val d = (cx - x) * (cx - x) + (cy - y) * (cy - y)
+                        if (d < bestD) { bestD = d; best = it.index }
+                    }
+                } else {
+                    val info = listState.layoutInfo
+                    val y = p.y - info.beforeContentPadding
+                    info.visibleItemsInfo.forEach {
+                        val cy = it.offset + it.size / 2f
+                        val d = kotlin.math.abs(cy - y)
+                        if (d < bestD) { bestD = d; best = it.index }
+                    }
+                }
+                return best
+            }
+
+            fun applyRange() {
+                val cur = indexAt(pointer)
+                if (cur < 0 || anchor < 0) return
+                val lo = minOf(anchor, cur); val hi = maxOf(anchor, cur)
+                vm.setSelection(base + list.subList(lo, (hi + 1).coerceAtMost(list.size)).map { it.file })
+            }
+
+            // Autoscroll ai bordi durante il trascinamento
+            LaunchedEffect(dragging) {
+                while (dragging) {
+                    val edge = 120f
+                    val dy = when {
+                        pointer.y < edge -> -((edge - pointer.y) / edge * 28f)
+                        pointer.y > viewH - edge -> ((pointer.y - (viewH - edge)) / edge * 28f)
+                        else -> 0f
+                    }
+                    if (dy != 0f) { scrollState.scrollBy(dy); applyRange() }
+                    delay(16)
+                }
+            }
+
+            val dragMod = Modifier.fillMaxSize()
+                .onSizeChanged { viewH = it.height }
+                .pointerInput(list) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { o ->
+                            pointer = o
+                            anchor = indexAt(o)
+                            base = vm.selection
+                            if (anchor in list.indices) {
+                                val f = list[anchor].file
+                                vm.setSelection(base + f)
+                                dragging = true
                             }
                         },
-                        onLongClick = { vm.toggleSelect(item.file) },
+                        onDrag = { change, _ -> change.consume(); pointer = change.position; applyRange() },
+                        onDragEnd = { dragging = false },
+                        onDragCancel = { dragging = false },
                     )
+                }
+
+            val onItemClick: (FileItem) -> Unit = { item ->
+                when {
+                    inSelection -> vm.toggleSelect(item.file)
+                    item.isDir -> vm.open(item.file)
+                    item.ext in ARCHIVE_EXT && item.ext != "cbz" && item.ext != "cbr" -> nav.extractArchive(item.file)
+                    else -> nav.openFile(item.file)
+                }
+            }
+
+            if (grid) {
+                LazyVerticalGrid(
+                    GridCells.Adaptive(104.dp), dragMod, state = gridState,
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 140.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+                    userScrollEnabled = !dragging,
+                ) {
+                    items(list, key = { it.file.absolutePath }, contentType = { if (it.isDir) 0 else 1 }) { item ->
+                        GridCard(item, item.file in sel, inSelection) { onItemClick(item) }
+                    }
+                }
+            } else {
+                LazyColumn(
+                    dragMod, state = listState,
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 140.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    userScrollEnabled = !dragging,
+                ) {
+                    items(list, key = { it.file.absolutePath }, contentType = { if (it.isDir) 0 else 1 }) { item ->
+                        FileCard(item, item.file in sel, inSelection, onClick = { onItemClick(item) })
+                    }
                 }
             }
 
@@ -174,21 +290,6 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                 }
             }
 
-            // Barra azioni per la selezione
-            AnimatedVisibility(
-                inSelection, Modifier.align(Alignment.BottomCenter).padding(16.dp).navigationBarsPadding(),
-                enter = fadeIn() + slideInVertically { it }, exit = fadeOut() + slideOutVertically { it },
-            ) {
-                Surface(shape = RoundedCornerShape(32.dp), tonalElevation = 8.dp, shadowElevation = 12.dp, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                    Row(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        BarAction(Icons.Filled.ContentCopy, "Copia") { vm.copySelection() }
-                        BarAction(Icons.Filled.ContentCut, "Taglia") { vm.cutSelection() }
-                        BarAction(Icons.Filled.Share, "Condividi") { shareFiles(ctx, sel.toList()) }
-                        BarAction(Icons.Filled.Delete, "Elimina", tint = MaterialTheme.colorScheme.error) { dlg = Dlg.TrashConfirm }
-                        BarAction(Icons.Filled.MoreHoriz, "Altro") { sheet = Sheet.MORE }
-                    }
-                }
-            }
         }
     }
 
@@ -235,6 +336,7 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                         val one = sel.singleOrNull()
                         val tiles = buildList {
                             if (one != null) add(Tile(Icons.Filled.DriveFileRenameOutline, "Rinomina", Color(0xFF3B82F6)) { sheet = Sheet.NONE; dlg = Dlg.Rename(one) })
+                            add(Tile(Icons.Filled.SelectAll, "Seleziona tutto", Color(0xFF0EA5E9)) { sheet = Sheet.NONE; vm.selectAll() })
                             add(Tile(Icons.Filled.Inventory2, "Comprimi", Color(0xFF8B5CF6)) { sheet = Sheet.NONE; nav.compressSelection(sel.toList()) })
                             add(Tile(Icons.Filled.Label, "Tag", Color(0xFFEC4899)) { sheet = Sheet.NONE; nav.tagSelection(sel.toList()) })
                             if (one != null && one.isFile) add(Tile(Icons.Filled.Link, "Link temporaneo", Color(0xFF06B6D4)) { sheet = Sheet.NONE; nav.linkFile(one) })
@@ -270,7 +372,7 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
 
 @Composable
 private fun BarAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, tint: Color = MaterialTheme.colorScheme.onSurface, onClick: () -> Unit) {
-    IconButton(onClick) { Icon(icon, label, tint = tint) }
+    IconButton(onClick, Modifier.size(42.dp)) { Icon(icon, label, tint = tint) }
 }
 
 @Composable
@@ -307,7 +409,7 @@ private fun Breadcrumb(dir: File, root: File, onNav: (File) -> Unit) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FileCard(item: FileItem, selected: Boolean, selectionMode: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun FileCard(item: FileItem, selected: Boolean, selectionMode: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(22.dp)
     ElevatedCard(
         shape = shape,
@@ -323,7 +425,7 @@ private fun FileCard(item: FileItem, selected: Boolean, selectionMode: Boolean, 
                         (if (item.isDir) "" else ", " + formatSize(item.size)) + ", " + formatDate(item.modified) +
                         (if (selected) ", selezionato" else "")
                 }
-                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                .clickable(onClick = onClick)
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -350,6 +452,36 @@ private fun FileCard(item: FileItem, selected: Boolean, selectionMode: Boolean, 
             } else if (item.isDir) {
                 Icon(Icons.Filled.ChevronRight, null, tint = MaterialTheme.colorScheme.outline)
             }
+        }
+    }
+}
+
+@Composable
+private fun GridCard(item: FileItem, selected: Boolean, selectionMode: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(18.dp)
+    Box(
+        Modifier.fillMaxWidth().aspectRatio(1f).clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .semantics(mergeDescendants = true) {
+                contentDescription = (if (item.isDir) "Cartella " else "File ") + item.name + (if (selected) ", selezionato" else "")
+            }
+            .clickable(onClick = onClick),
+    ) {
+        FileThumb(item, Modifier.fillMaxSize(), fill = true)
+        Box(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xB3000000))))
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+        ) {
+            Text(item.name, color = Color.White, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (selected) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)))
+        if (selectionMode) {
+            Icon(
+                if (selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null,
+                Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp),
+                tint = if (selected) MaterialTheme.colorScheme.primary else Color.White,
+            )
         }
     }
 }

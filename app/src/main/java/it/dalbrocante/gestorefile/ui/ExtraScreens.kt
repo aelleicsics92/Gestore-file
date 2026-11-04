@@ -53,38 +53,9 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.random.Random
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SimpleScaffold(title: String, onBack: () -> Unit, actions: @Composable () -> Unit = {}, content: @Composable () -> Unit) {
-    Scaffold(topBar = {
-        TopAppBar(
-            title = { Text(title) },
-            navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Indietro") } },
-            actions = { actions() },
-        )
-    }) { pad -> Box(Modifier.padding(pad).fillMaxSize()) { content() } }
-}
-
-@Composable
-fun TrashScreen(vm: FileViewModel, onBack: () -> Unit) {
-    var items by remember { mutableStateOf<List<FileItem>>(vm.repo.trashItems()) }
-    fun reload() { items = vm.repo.trashItems(); vm.refresh() }
-    SimpleScaffold("Cestino", onBack, actions = {
-        IconButton({ vm.repo.emptyTrash(); reload() }) { Icon(Icons.Default.DeleteForever, "Svuota") }
-    }) {
-        LazyColumn {
-            items(items, key = { it.file.name }) { i ->
-                ListItem(
-                    headlineContent = { Text(i.name.substringAfter("__")) },
-                    supportingContent = { Text("${formatSize(i.size)}  ${formatDate(i.modified)}") },
-                    trailingContent = {
-                        IconButton({ vm.repo.restoreFromTrash(i.file); reload() }) { Icon(Icons.Default.Restore, "Ripristina") }
-                    },
-                )
-            }
-        }
-    }
-}
+private fun SimpleScaffold(title: String, onBack: () -> Unit, actions: @Composable () -> Unit = {}, content: @Composable () -> Unit) =
+    Page2(title, onBack, actions = { actions() }, content = content)
 
 @Composable
 fun VaultScreen(vm: FileViewModel, onBack: () -> Unit) {
@@ -116,7 +87,7 @@ fun VaultScreen(vm: FileViewModel, onBack: () -> Unit) {
             }
             LazyColumn {
                 items(items, key = { it.name }) { f ->
-                    ListItem(
+                    CardListItem(
                         headlineContent = { Text(f.name) },
                         supportingContent = { Text(formatSize(f.length())) },
                         trailingContent = {
