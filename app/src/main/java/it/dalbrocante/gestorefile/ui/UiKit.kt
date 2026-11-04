@@ -92,20 +92,20 @@ object Thumbs {
 }
 
 @Composable
-fun FileThumb(item: FileItem, modifier: Modifier = Modifier, size: Dp = 56.dp, fill: Boolean = false) {
+fun FileThumb(item: FileItem, modifier: Modifier = Modifier, size: Dp = 56.dp, fill: Boolean = false, neutral: Boolean = false) {
     val ctx = LocalContext.current
     val kind = remember(item.ext, item.isDir) { kindOf(item.ext, item.isDir) }
     val isVideo = !item.isDir && item.ext in VIDEO_EXT
     val hasPreview = !item.isDir && (item.ext in IMAGE_EXT || isVideo)
     Box(
-        (if (fill) modifier else modifier.size(size)).clip(RoundedCornerShape(if (fill) 0.dp else 16.dp)).background(kind.color.copy(alpha = 0.14f)),
+        (if (fill) modifier else modifier.size(size)).clip(RoundedCornerShape(if (fill) 0.dp else 16.dp)).background(if (neutral) MaterialTheme.colorScheme.surfaceContainerHigh else kind.color.copy(alpha = 0.14f)),
         contentAlignment = Alignment.Center,
     ) {
         // L'icona resta sotto: è il segnaposto finché la miniatura non è pronta
         if (item.ext.isNotEmpty() && !item.isDir && kind.label == "Altro") {
             Text(item.ext.take(4).uppercase(), color = kind.color, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         } else {
-            Icon(kind.icon, null, tint = kind.color, modifier = Modifier.size(if (fill) 40.dp else size * 0.5f))
+            Icon(kind.icon, null, tint = kind.color, modifier = Modifier.size(if (fill) 48.dp else size * 0.5f))
         }
         if (hasPreview) {
             val req = remember(item.file.absolutePath, item.modified) {

@@ -40,15 +40,15 @@ fun SearchDialog(onDismiss: () -> Unit, onSearch: (SearchFilter) -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text("Cerca") },
         text = {
-            Column {
+            Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp)) {
                 AppTextField(q, { q = it }, "Nome contiene", imeAction = ImeAction.Next, autoFocus = true)
-                AppTextField(ext, { ext = it }, "Estensioni (pdf, jpg)", Modifier.padding(top = 8.dp), imeAction = ImeAction.Next)
+                AppTextField(ext, { ext = it }, "Estensioni (pdf, jpg)", Modifier.padding(top = 6.dp), imeAction = ImeAction.Next)
                 AppTextField(
-                    minMb, { minMb = it }, "Dimensione minima (MB)", Modifier.padding(top = 8.dp),
+                    minMb, { minMb = it }, "Dimensione minima (MB)", Modifier.padding(top = 6.dp),
                     imeAction = ImeAction.Next, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
                 AppTextField(
-                    days, { days = it }, "Modificati negli ultimi (giorni)", Modifier.padding(top = 8.dp),
+                    days, { days = it }, "Modificati negli ultimi (giorni)", Modifier.padding(top = 6.dp),
                     onEnter = go, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
             }

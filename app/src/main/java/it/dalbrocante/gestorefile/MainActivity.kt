@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
@@ -70,7 +71,7 @@ import java.util.Locale
 
 private sealed interface Route {
     data object Files : Route
-    data class Viewer(val file: File) : Route
+    data class Viewer(val file: File, val under: Route) : Route
     data class Archive(val file: File) : Route
     data object Trash : Route
     data object Storage : Route
@@ -161,11 +162,14 @@ class MainActivity : FragmentActivity() {
         }
 
         BackHandler(route != Route.Files || vm.currentDir != vm.root || vm.selection.isNotEmpty() || vm.searchResults != null) {
-            if (route != Route.Files) route = Route.Files else vm.up()
+            val cur = route
+            if (cur is Route.Viewer) route = cur.under
+            else if (cur != Route.Files) route = Route.Files
+            else vm.up()
         }
 
         val openFile: (File) -> Unit = { f ->
-            if (hasInternalViewer(f.extension.lowercase())) route = Route.Viewer(f) else openExternal(this, f)
+            if (hasInternalViewer(f.extension.lowercase())) route = Route.Viewer(f, route) else openExternal(this, f)
         }
 
         val nav = Nav(
@@ -190,12 +194,9 @@ class MainActivity : FragmentActivity() {
             installApks = { ApkInstaller.start(this, it); vm.clearSelection() },
         )
 
-        when (val r = route) {
+        when (val r = (route as? Route.Viewer)?.under ?: route) {
             Route.Files -> FileManagerScreen(vm, nav)
-            is Route.Viewer -> ViewerScreen(
-                r.file,
-                if (r.file.parentFile == vm.currentDir && vm.searchResults == null) vm.items.filter { !it.isDir }.map { it.file } else null,
-            ) { route = Route.Files }
+            is Route.Viewer -> Unit
             is Route.Archive -> ArchiveScreen(r.file, { route = Route.Files }) { vm.refresh(); route = Route.Files }
             Route.Trash -> TrashScreen(vm) { route = Route.Files }
             Route.Storage -> StorageScreen(vm, { route = Route.Files }, openFile)
@@ -210,6 +211,21 @@ class MainActivity : FragmentActivity() {
             Route.Remote -> RemoteScreen(vm, openFile) { route = Route.Files }
             Route.Cloud -> CloudScreen(vm, openFile) { route = Route.Files }
             Route.Terminal -> TerminalScreen(vm) { route = Route.Files }
+        }
+
+        // Il viewer è un overlay: la schermata sotto (statistiche, spazio, elenco) resta viva con scroll e stato
+        (route as? Route.Viewer)?.let { v ->
+            BackHandler { route = v.under }
+            Surface(
+                Modifier.fillMaxSize().pointerInput(Unit) {
+                    awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } }
+                },
+            ) {
+                ViewerScreen(
+                    v.file,
+                    if (v.file.parentFile == vm.currentDir && vm.searchResults == null) vm.items.filter { !it.isDir }.map { it.file } else null,
+                ) { route = v.under }
+            }
         }
 
         tagging?.let { src ->

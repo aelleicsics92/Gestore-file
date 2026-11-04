@@ -162,8 +162,16 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                 }
             }
 
-            val listState = rememberLazyListState()
-            val gridState = rememberLazyGridState()
+            val listState = vm.listState
+            val gridState = vm.gridState
+            // Ripristina la posizione (es. dopo il ritorno da un file o dal livello superiore)
+            LaunchedEffect(vm.items, vm.gridMode) {
+                val r = vm.restore
+                if (r != null && vm.items.isNotEmpty()) {
+                    if (vm.gridMode) gridState.scrollToItem(r.first, r.second) else listState.scrollToItem(r.first, r.second)
+                    vm.restore = null
+                }
+            }
             val density = LocalDensity.current
             val padPx = with(density) { 16.dp.toPx() }
             var dragging by remember { mutableStateOf(false) }
@@ -249,7 +257,7 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
             if (grid) {
                 LazyVerticalGrid(
                     GridCells.Adaptive(104.dp), dragMod, state = gridState,
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 140.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 170.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
                     userScrollEnabled = !dragging,
                 ) {
@@ -260,7 +268,7 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
             } else {
                 LazyColumn(
                     dragMod, state = listState,
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 140.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 170.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     userScrollEnabled = !dragging,
                 ) {
@@ -272,7 +280,7 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
 
             // Azioni flottanti
             Column(
-                Modifier.align(Alignment.BottomEnd).padding(20.dp).navigationBarsPadding(),
+                Modifier.align(Alignment.BottomEnd).padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 36.dp).navigationBarsPadding(),
                 horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 AnimatedVisibility(vm.clipboard.isNotEmpty() && !inSelection, enter = fadeIn() + slideInVertically { it }, exit = fadeOut() + slideOutVertically { it }) {
@@ -460,30 +468,35 @@ private fun FileCard(item: FileItem, selected: Boolean, selectionMode: Boolean, 
 
 @Composable
 private fun GridCard(item: FileItem, selected: Boolean, selectionMode: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(18.dp)
-    Box(
-        Modifier.fillMaxWidth().aspectRatio(1f).clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+    val shape = RoundedCornerShape(20.dp)
+    Column(
+        Modifier.fillMaxWidth().clip(shape)
+            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow)
             .semantics(mergeDescendants = true) {
                 contentDescription = (if (item.isDir) "Cartella " else "File ") + item.name + (if (selected) ", selezionato" else "")
             }
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .padding(6.dp),
     ) {
-        FileThumb(item, Modifier.fillMaxSize(), fill = true)
-        Box(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xB3000000))))
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-        ) {
-            Text(item.name, color = Color.White, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(14.dp))) {
+            // Sfondo neutro: solo l'icona mantiene il proprio colore
+            FileThumb(item, Modifier.fillMaxSize(), fill = true, neutral = true)
+            if (selectionMode) {
+                Icon(
+                    if (selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null,
+                    Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp),
+                    tint = if (selected) MaterialTheme.colorScheme.primary else Color.White,
+                )
+            }
         }
-        if (selected) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)))
-        if (selectionMode) {
-            Icon(
-                if (selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null,
-                Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp),
-                tint = if (selected) MaterialTheme.colorScheme.primary else Color.White,
-            )
-        }
+        Text(
+            item.name, Modifier.padding(horizontal = 4.dp).padding(top = 6.dp),
+            style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            if (item.isDir) formatDate(item.modified) else formatSize(item.size),
+            Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+        )
     }
 }

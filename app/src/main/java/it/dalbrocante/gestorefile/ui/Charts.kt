@@ -197,7 +197,7 @@ fun StorageScreen(vm: FileViewModel, onBack: () -> Unit, onOpenFile: (File) -> U
                         ChartPalette[i % ChartPalette.size], f?.name ?: "Altro (cartelle minori)",
                         if (f?.isDirectory == true) "Cartella" else if (f == null) "" else "File",
                         "${formatSize(s)}  ·  ${(s * 100 / total.coerceAtLeast(1))}%", selected == i,
-                    ) { selected = if (selected == i) null else i }
+                    ) { if (f != null && f.isFile) onOpenFile(f) else selected = if (selected == i) null else i }
                 }
                 selected?.let { s ->
                     val f = u[s].first

@@ -48,6 +48,17 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
     var loading by mutableStateOf(false)
         private set
     private var listJob: Job? = null
+    val listState = androidx.compose.foundation.lazy.LazyListState()
+    val gridState = androidx.compose.foundation.lazy.grid.LazyGridState()
+    private val positions = HashMap<String, Pair<Int, Int>>()
+    /** Posizione di scroll da ripristinare quando l'elenco della cartella corrente è pronto. */
+    var restore by mutableStateOf<Pair<Int, Int>?>(null)
+
+    private fun savePosition() {
+        positions[currentDir.path] =
+            if (gridMode) gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset
+            else listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+    }
     private val cache = LinkedHashMap<String, List<FileItem>>()
     private val prefs = app.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
     var gridMode by mutableStateOf(prefs.getBoolean("grid", false))
@@ -73,6 +84,8 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
 
     fun open(dir: File) {
         if (!dir.isDirectory) return
+        if (dir != currentDir) savePosition()
+        restore = if (dir == currentDir) restore else (positions[dir.path] ?: (0 to 0))
         currentDir = dir
         items = cache[dir.path] ?: emptyList()
         selection = emptySet()
