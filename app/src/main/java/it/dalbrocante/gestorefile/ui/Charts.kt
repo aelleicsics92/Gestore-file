@@ -4,6 +4,13 @@ import android.os.Environment
 import android.os.StatFs
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.platform.LocalContext
+import it.dalbrocante.gestorefile.util.shareFiles
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -24,6 +31,7 @@ import it.dalbrocante.gestorefile.data.FileItem
 import it.dalbrocante.gestorefile.data.Tools
 import it.dalbrocante.gestorefile.util.formatSize
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -48,13 +56,20 @@ private fun LegendCard(color: Color, title: String, subtitle: String, trailing: 
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FileRowCompact(file: File, onClick: () -> Unit, onFolder: () -> Unit) {
+private fun FileRowCompact(file: File, selected: Boolean, selecting: Boolean, onClick: () -> Unit, onLongClick: () -> Unit, onFolder: () -> Unit) {
+    val shape = RoundedCornerShape(18.dp)
     ElevatedCard(
-        onClick = onClick, shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = shape,
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
     ) {
-        Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth().clip(shape).combinedClickable(onClick = onClick, onLongClick = onLongClick).padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             FileThumb(FileItem(file), size = 44.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -62,10 +77,34 @@ private fun FileRowCompact(file: File, onClick: () -> Unit, onFolder: () -> Unit
                 Text(file.parent ?: "", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(formatSize(if (file.isFile) file.length() else 0L), style = MaterialTheme.typography.labelLarge)
-            IconButton(onFolder) { Icon(androidx.compose.material.icons.Icons.Filled.FolderOpen, "Apri cartella") }
+            if (selecting) {
+                Icon(
+                    if (selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null,
+                    Modifier.padding(start = 8.dp), tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                )
+            } else {
+                IconButton(onFolder) { Icon(Icons.Filled.FolderOpen, "Apri cartella") }
+            }
         }
     }
 }
+
+/** Azioni sulla selezione (nella barra in alto): condividi, copia, sposta, ZIP, elimina. */
+@Composable
+private fun RowScope.SelectionActions(
+    sel: Set<File>, vm: FileViewModel, onCompress: (List<File>) -> Unit, onClear: () -> Unit, onDelete: () -> Unit,
+) {
+    val ctx = LocalContext.current
+    IconButton({ vm.clipboard = sel.toList(); vm.clipMode = ClipMode.CUT; vm.message = "Pronti da spostare: apri la cartella e premi Incolla"; onClear() }) { Icon(Icons.Filled.DriveFileMove, "Sposta") }
+    IconButton({ vm.clipboard = sel.toList(); vm.clipMode = ClipMode.COPY; vm.message = "Copiati: apri la cartella e premi Incolla"; onClear() }) { Icon(Icons.Filled.ContentCopy, "Copia") }
+    IconButton({ shareFiles(ctx, sel.toList()) }) { Icon(Icons.Filled.Share, "Condividi") }
+    IconButton({ onCompress(sel.toList()); onClear() }) { Icon(Icons.Filled.FolderZip, "Comprimi in ZIP") }
+    IconButton(onDelete) { Icon(Icons.Filled.Delete, "Elimina", tint = MaterialTheme.colorScheme.error) }
+}
+
+@Composable
+private fun TrashConfirm(count: Int, onDismiss: () -> Unit, onOk: () -> Unit) =
+    ConfirmDialog("Elimina", "Spostare $count elementi nel cestino (30 giorni)?", onDismiss, onOk)
 
 // ---------- Statistiche per categoria ----------
 
@@ -86,14 +125,26 @@ private fun computeCats(root: File): List<Cat> {
 }
 
 @Composable
-fun StatsScreen(vm: FileViewModel, onBack: () -> Unit, onOpenFile: (File) -> Unit) {
+fun StatsScreen(vm: FileViewModel, onBack: () -> Unit, onOpenFile: (File) -> Unit, onCompress: (List<File>) -> Unit) {
     var cats by remember { mutableStateOf<List<Cat>?>(null) }
     var selected by remember { mutableStateOf<Int?>(null) }
-    LaunchedEffect(vm.currentDir) {
-        cats = null; selected = null
+    var tick by remember { mutableStateOf(0) }
+    var sel by remember { mutableStateOf<Set<File>>(emptySet()) }
+    var confirm by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(vm.currentDir, tick) {
+        cats = null
         cats = withContext(Dispatchers.IO) { computeCats(vm.currentDir) }
     }
-    Page2("Statistiche", onBack) {
+    BackHandler(sel.isNotEmpty()) { sel = emptySet() }
+    if (confirm) TrashConfirm(sel.size, { confirm = false }) {
+        confirm = false
+        val victims = sel.toList(); sel = emptySet()
+        scope.launch { withContext(Dispatchers.IO) { victims.forEach { vm.repo.moveToTrash(it) } }; tick++; vm.refresh() }
+    }
+    Page2(if (sel.isNotEmpty()) "${sel.size} selezionati" else "Statistiche", { if (sel.isNotEmpty()) sel = emptySet() else onBack() }, actions = {
+        if (sel.isNotEmpty()) SelectionActions(sel, vm, onCompress, { sel = emptySet() }) { confirm = true }
+    }) {
         val c = cats?.filter { it.size > 0 }
         if (c == null) {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -124,7 +175,11 @@ fun StatsScreen(vm: FileViewModel, onBack: () -> Unit, onOpenFile: (File) -> Uni
                     val cat = c[s]
                     item { SectionHeader("File più grandi: ${cat.kind.label}") }
                     items(cat.top, key = { it.absolutePath }) { f ->
-                        FileRowCompact(f, { onOpenFile(f) }) { f.parentFile?.let { vm.open(it) }; onBack() }
+                        FileRowCompact(
+                            f, f in sel, sel.isNotEmpty(),
+                            onClick = { if (sel.isNotEmpty()) sel = if (f in sel) sel - f else sel + f else onOpenFile(f) },
+                            onLongClick = { sel = if (f in sel) sel - f else sel + f },
+                        ) { f.parentFile?.let { vm.open(it) }; onBack() }
                     }
                 }
             }
@@ -135,7 +190,7 @@ fun StatsScreen(vm: FileViewModel, onBack: () -> Unit, onOpenFile: (File) -> Uni
 // ---------- Analizzatore spazio ----------
 
 @Composable
-fun StorageScreen(vm: FileViewModel, onBack: () -> Unit, onOpenFile: (File) -> Unit) {
+fun StorageScreen(vm: FileViewModel, onBack: () -> Unit, onOpenFile: (File) -> Unit, onCompress: (List<File>) -> Unit) {
     var usage by remember { mutableStateOf<List<Pair<File?, Long>>?>(null) }
     var selected by remember { mutableStateOf<Int?>(null) }
     var big by remember { mutableStateOf<List<File>>(emptyList()) }
@@ -145,7 +200,17 @@ fun StorageScreen(vm: FileViewModel, onBack: () -> Unit, onOpenFile: (File) -> U
             st.totalBytes to (st.totalBytes - st.availableBytes)
         }.getOrNull()
     }
-    LaunchedEffect(vm.currentDir) {
+    var tick by remember { mutableStateOf(0) }
+    var sel by remember { mutableStateOf<Set<File>>(emptySet()) }
+    var confirm by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    BackHandler(sel.isNotEmpty()) { sel = emptySet() }
+    if (confirm) TrashConfirm(sel.size, { confirm = false }) {
+        confirm = false
+        val victims = sel.toList(); sel = emptySet()
+        scope.launch { withContext(Dispatchers.IO) { victims.forEach { vm.repo.moveToTrash(it) } }; tick++; vm.refresh() }
+    }
+    LaunchedEffect(vm.currentDir, tick) {
         usage = null; selected = null
         usage = withContext(Dispatchers.IO) {
             val all = Tools.usage(vm.currentDir).filter { it.second > 0 }
@@ -154,14 +219,18 @@ fun StorageScreen(vm: FileViewModel, onBack: () -> Unit, onOpenFile: (File) -> U
             if (rest > 0) top + (null to rest) else top
         }
     }
-    LaunchedEffect(selected, usage) {
+    LaunchedEffect(selected, usage, tick) {
         val u = usage; val i = selected
         big = if (u != null && i != null) {
             val f = u[i].first
             if (f == null) emptyList() else withContext(Dispatchers.IO) { if (f.isDirectory) Tools.biggest(f, 20) else listOf(f) }
         } else emptyList()
     }
-    Page2("Spazio: ${vm.currentDir.name.ifEmpty { "Memoria" }}", onBack) {
+    Page2(
+        if (sel.isNotEmpty()) "${sel.size} selezionati" else "Spazio: ${vm.currentDir.name.ifEmpty { "Memoria" }}",
+        { if (sel.isNotEmpty()) sel = emptySet() else onBack() },
+        actions = { if (sel.isNotEmpty()) SelectionActions(sel, vm, onCompress, { sel = emptySet() }) { confirm = true } },
+    ) {
         val u = usage
         if (u == null) {
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -206,7 +275,13 @@ fun StorageScreen(vm: FileViewModel, onBack: () -> Unit, onOpenFile: (File) -> U
                     }
                     if (big.isNotEmpty()) {
                         item { SectionHeader("File più grandi") }
-                        items(big, key = { it.absolutePath }) { b -> FileRowCompact(b, { onOpenFile(b) }) { b.parentFile?.let { vm.open(it) }; onBack() } }
+                        items(big, key = { it.absolutePath }) { b ->
+                            FileRowCompact(
+                                b, b in sel, sel.isNotEmpty(),
+                                onClick = { if (sel.isNotEmpty()) sel = if (b in sel) sel - b else sel + b else onOpenFile(b) },
+                                onLongClick = { sel = if (b in sel) sel - b else sel + b },
+                            ) { b.parentFile?.let { vm.open(it) }; onBack() }
+                        }
                     }
                 }
             }

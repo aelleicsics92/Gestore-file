@@ -199,12 +199,12 @@ class MainActivity : FragmentActivity() {
             is Route.Viewer -> Unit
             is Route.Archive -> ArchiveScreen(r.file, { route = Route.Files }) { vm.refresh(); route = Route.Files }
             Route.Trash -> TrashScreen(vm) { route = Route.Files }
-            Route.Storage -> StorageScreen(vm, { route = Route.Files }, openFile)
+            Route.Storage -> StorageScreen(vm, { route = Route.Files }, openFile, { compress = it })
             Route.Tools -> ToolsScreen(vm, nav, { route = Route.Files }) { route = Route.Vault }
             Route.Vault -> VaultScreen(vm) { route = Route.Tools }
             Route.Tags -> TagsScreen(vm.store, { vm.open(it); route = Route.Files }) { route = Route.Files }
             Route.Rules -> RulesScreen(vm, vm.store) { route = Route.Files }
-            Route.Stats -> StatsScreen(vm, { route = Route.Files }, openFile)
+            Route.Stats -> StatsScreen(vm, { route = Route.Files }, openFile, { compress = it })
             Route.Dual -> DualPaneScreen(vm, openFile) { vm.refresh(); route = Route.Files }
             Route.PdfTools -> PdfToolsScreen(vm) { route = Route.Files }
             Route.Ocr -> OcrScreen(vm, openFile) { route = Route.Files }

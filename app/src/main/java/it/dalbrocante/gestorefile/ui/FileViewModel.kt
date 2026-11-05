@@ -32,7 +32,7 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var selection by mutableStateOf<Set<File>>(emptySet())
         private set
-    var sort by mutableStateOf(SortMode.NAME)
+    var sort by mutableStateOf(SortMode.AUTO)
         private set
     var showHidden by mutableStateOf(false)
         private set

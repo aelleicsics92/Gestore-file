@@ -321,7 +321,7 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                     Sheet.MENU -> {
                         SectionHeader("Ordina per")
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf(SortMode.NAME to "Nome", SortMode.DATE to "Data", SortMode.SIZE to "Dimensione", SortMode.TYPE to "Tipo").forEach { (m, l) ->
+                            listOf(SortMode.AUTO to "Auto", SortMode.NAME to "Nome", SortMode.DATE to "Data", SortMode.SIZE to "Dimensione", SortMode.TYPE to "Tipo").forEach { (m, l) ->
                                 FilterChip(vm.sort == m, { vm.changeSort(m) }, { Text(l) })
                             }
                         }

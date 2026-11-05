@@ -3,7 +3,7 @@ package it.dalbrocante.gestorefile.data
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-enum class SortMode { NAME, DATE, SIZE, TYPE }
+enum class SortMode { AUTO, NAME, DATE, SIZE, TYPE }
 
 data class FileItem(
     val file: File,
@@ -47,8 +47,14 @@ class FileRepository(private val trashDir: File) {
             if (visible.size < 200) visible.mapTo(ArrayList(visible.size)) { statItem(it) }
             else visible.parallelStream().map { statItem(it) }.collect(java.util.stream.Collectors.toList())
         val byName = compareBy<FileItem, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
-        val cmp: Comparator<FileItem> = when (sort) {
-            SortMode.NAME -> byName
+        // AUTO: più recenti prima in Download e nelle cartelle di foto/video, altrimenti per nome
+        val effective = if (sort != SortMode.AUTO) sort else {
+            val media = items.count { !it.isDir && (it.ext in it.dalbrocante.gestorefile.util.IMAGE_EXT || it.ext in it.dalbrocante.gestorefile.util.VIDEO_EXT) }
+            val files = items.count { !it.isDir }
+            if (dir.name.equals("Download", true) || dir.name.equals("Downloads", true) || (files > 0 && media * 2 > files)) SortMode.DATE else SortMode.NAME
+        }
+        val cmp: Comparator<FileItem> = when (effective) {
+            SortMode.AUTO, SortMode.NAME -> byName
             SortMode.DATE -> compareByDescending { it.modified }
             SortMode.SIZE -> compareByDescending { it.size }
             SortMode.TYPE -> compareBy<FileItem> { it.ext }.then(byName)
