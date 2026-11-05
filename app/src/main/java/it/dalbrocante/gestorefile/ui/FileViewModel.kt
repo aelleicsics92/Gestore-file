@@ -26,7 +26,10 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
     val store = Store(app.filesDir)
     val root: File = Environment.getExternalStorageDirectory()
 
-    var currentDir by mutableStateOf(root)
+    private val statePrefs = app.getSharedPreferences("nav_state", android.content.Context.MODE_PRIVATE)
+    var currentDir by mutableStateOf(
+        statePrefs.getString("dir", null)?.let { File(it) }?.takeIf { it.isDirectory && it.canRead() } ?: root,
+    )
         private set
     var items by mutableStateOf<List<FileItem>>(emptyList())
         private set
@@ -74,7 +77,17 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleGrid() { gridMode = !gridMode; prefs.edit().putBoolean("grid", gridMode).apply() }
 
-    init { refresh() }
+    init {
+        if (currentDir != root) restore = statePrefs.getInt("idx", 0) to statePrefs.getInt("off", 0)
+        refresh()
+    }
+
+    /** Salva cartella e posizione di scroll: l'app riparte da dove l'hai lasciata anche se il sistema la chiude. */
+    fun persistState() {
+        savePosition()
+        val p = positions[currentDir.path] ?: (0 to 0)
+        statePrefs.edit().putString("dir", currentDir.path).putInt("idx", p.first).putInt("off", p.second).apply()
+    }
 
     /** Legge la cartella in background; una nuova richiesta annulla la precedente. */
     fun refresh() {
@@ -95,6 +108,7 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
         if (dir != currentDir) savePosition()
         restore = if (dir == currentDir) restore else (positions[dir.path] ?: (0 to 0))
         currentDir = dir
+        statePrefs.edit().putString("dir", dir.path).putInt("idx", 0).putInt("off", 0).apply()
         items = cache[dir.path] ?: emptyList()
         selection = emptySet()
         searchResults = null
