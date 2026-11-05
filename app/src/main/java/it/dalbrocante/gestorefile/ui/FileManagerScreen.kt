@@ -109,24 +109,8 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snack) },
         topBar = {
-            if (inSelection) {
-                Surface(
-                    Modifier.statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp).fillMaxWidth(),
-                    shape = RoundedCornerShape(32.dp), tonalElevation = 8.dp, shadowElevation = 12.dp,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                ) {
-                    Row(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        BarAction(Icons.Filled.Close, "Annulla selezione") { vm.clearSelection() }
-                        Text("${sel.size}", Modifier.weight(1f).padding(start = 2.dp), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                        BarAction(Icons.Filled.DriveFileMove, "Sposta") { vm.cutSelection() }
-                        BarAction(Icons.Filled.ContentCopy, "Copia") { vm.copySelection() }
-                        BarAction(Icons.Filled.Share, "Condividi") { shareFiles(ctx, sel.toList()) }
-                        BarAction(Icons.Filled.FolderZip, "Comprimi in ZIP") { nav.compressSelection(sel.toList()) }
-                        BarAction(Icons.Filled.Delete, "Elimina", tint = MaterialTheme.colorScheme.error) { dlg = Dlg.TrashConfirm }
-                        BarAction(Icons.Filled.MoreVert, "Altro") { sheet = Sheet.MORE }
-                    }
-                }
-            } else {
+            // L'altezza della barra non cambia mai: la barra azioni si sovrappone all'intestazione, così la lista resta ferma
+            Box {
                 Column(Modifier.statusBarsPadding().padding(horizontal = 20.dp, vertical = 8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
@@ -149,6 +133,26 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                     }
                     Spacer(Modifier.height(8.dp))
                     Breadcrumb(vm.currentDir, vm.root) { vm.open(it) }
+                }
+                if (inSelection) {
+                    Box(Modifier.matchParentSize().background(MaterialTheme.colorScheme.background)) {
+                Surface(
+                    Modifier.statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp).fillMaxWidth(),
+                    shape = RoundedCornerShape(32.dp), tonalElevation = 8.dp, shadowElevation = 12.dp,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                ) {
+                    Row(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        BarAction(Icons.Filled.Close, "Annulla selezione") { vm.clearSelection() }
+                        Text("${sel.size}", Modifier.weight(1f).padding(start = 2.dp), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        BarAction(Icons.Filled.DriveFileMove, "Sposta") { vm.cutSelection() }
+                        BarAction(Icons.Filled.ContentCopy, "Copia") { vm.copySelection() }
+                        BarAction(Icons.Filled.Share, "Condividi") { shareFiles(ctx, sel.toList()) }
+                        BarAction(Icons.Filled.FolderZip, "Comprimi in ZIP") { nav.compressSelection(sel.toList()) }
+                        BarAction(Icons.Filled.Delete, "Elimina", tint = MaterialTheme.colorScheme.error) { dlg = Dlg.TrashConfirm }
+                        BarAction(Icons.Filled.MoreVert, "Altro") { sheet = Sheet.MORE }
+                    }
+                }
+                    }
                 }
             }
         },

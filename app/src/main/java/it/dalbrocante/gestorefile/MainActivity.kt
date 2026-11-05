@@ -88,6 +88,46 @@ private sealed interface Route {
     data object Terminal : Route
 }
 
+private fun routeName(r: Route): String = when (r) {
+    Route.Files -> "Files"
+    is Route.Viewer -> "Viewer|${r.file.path}|${routeName(r.under)}"
+    is Route.Archive -> "Archive|${r.file.path}"
+    Route.Trash -> "Trash"
+    Route.Storage -> "Storage"
+    Route.Tools -> "Tools"
+    Route.Vault -> "Tools" // il Vault richiede sempre lo sblocco
+    Route.Tags -> "Tags"
+    Route.Rules -> "Rules"
+    Route.Stats -> "Stats"
+    Route.Dual -> "Dual"
+    Route.PdfTools -> "PdfTools"
+    Route.Ocr -> "Ocr"
+    Route.Remote -> "Remote"
+    Route.Cloud -> "Cloud"
+    Route.Terminal -> "Terminal"
+}
+
+private fun routeFrom(s: String?): Route {
+    val parts = (s ?: return Route.Files).split("|")
+    return when (parts[0]) {
+        "Viewer" -> File(parts.getOrElse(1) { "" }).takeIf { it.isFile }?.let { Route.Viewer(it, routeFrom(parts.drop(2).joinToString("|"))) } ?: Route.Files
+        "Archive" -> File(parts.getOrElse(1) { "" }).takeIf { it.isFile }?.let { Route.Archive(it) } ?: Route.Files
+        "Trash" -> Route.Trash
+        "Storage" -> Route.Storage
+        "Tools" -> Route.Tools
+        "Tags" -> Route.Tags
+        "Rules" -> Route.Rules
+        "Stats" -> Route.Stats
+        "Dual" -> Route.Dual
+        "PdfTools" -> Route.PdfTools
+        "Ocr" -> Route.Ocr
+        "Remote" -> Route.Remote
+        "Cloud" -> Route.Cloud
+        "Terminal" -> Route.Terminal
+        else -> Route.Files
+    }
+}
+
 class MainActivity : FragmentActivity() {
 
     private val vm: FileViewModel by viewModels()
@@ -156,7 +196,9 @@ class MainActivity : FragmentActivity() {
             return
         }
 
-        var route by remember { mutableStateOf<Route>(Route.Files) }
+        val navPrefs = remember { getSharedPreferences("nav_state", MODE_PRIVATE) }
+        var route by remember { mutableStateOf(routeFrom(navPrefs.getString("route", null))) }
+        LaunchedEffect(route) { navPrefs.edit().putString("route", routeName(route)).apply() }
         var compress by remember { mutableStateOf<List<File>?>(null) }
         var tagging by remember { mutableStateOf<List<File>?>(null) }
         var linking by remember { mutableStateOf<File?>(null) }
