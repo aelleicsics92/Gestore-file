@@ -25,10 +25,12 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.ContentScale
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -165,9 +167,19 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
             val listState = vm.listState
             val gridState = vm.gridState
             // Ripristina la posizione (es. dopo il ritorno da un file o dal livello superiore)
-            LaunchedEffect(vm.items, vm.gridMode) {
+            LaunchedEffect(vm.items, vm.gridMode, vm.focusFile) {
+                val ff = vm.focusFile
                 val r = vm.restore
-                if (r != null && vm.items.isNotEmpty()) {
+                if (ff != null) {
+                    val idx = vm.items.indexOfFirst { it.file == ff }
+                    if (idx >= 0) {
+                        val target = (idx - 1).coerceAtLeast(0)
+                        if (vm.gridMode) gridState.scrollToItem(target) else listState.scrollToItem(target)
+                        vm.restore = null
+                        delay(3500)
+                        if (vm.focusFile == ff) vm.focusFile = null
+                    }
+                } else if (r != null && vm.items.isNotEmpty()) {
                     if (vm.gridMode) gridState.scrollToItem(r.first, r.second) else listState.scrollToItem(r.first, r.second)
                     vm.restore = null
                 }
@@ -179,6 +191,17 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
             var viewH by remember { mutableStateOf(0) }
             var anchor by remember { mutableStateOf(-1) }
             var base by remember { mutableStateOf<Set<File>>(emptySet()) }
+            val scope = rememberCoroutineScope()
+            var suppressClick by remember { mutableStateOf(false) }
+            // Durante il trascinamento per selezionare, la lista non deve scorrere (nemmeno di pochi pixel)
+            val blockScroll = remember {
+                object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+                    override fun onPreScroll(available: Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource) =
+                        if (dragging) available else Offset.Zero
+                    override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity) =
+                        if (dragging) available else androidx.compose.ui.unit.Velocity.Zero
+                }
+            }
             val grid = vm.gridMode
             val scrollState: ScrollableState = if (grid) gridState else listState
 
@@ -226,6 +249,7 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
             }
 
             val dragMod = Modifier.fillMaxSize()
+                .nestedScroll(blockScroll)
                 .onSizeChanged { viewH = it.height }
                 .pointerInput(list) {
                     detectDragGesturesAfterLongPress(
@@ -237,15 +261,17 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                                 val f = list[anchor].file
                                 vm.replaceSelection(base + f)
                                 dragging = true
+                                suppressClick = true // il rilascio non deve contare come tap (deselezionerebbe il file)
                             }
                         },
                         onDrag = { change, _ -> change.consume(); pointer = change.position; applyRange() },
-                        onDragEnd = { dragging = false },
-                        onDragCancel = { dragging = false },
+                        onDragEnd = { dragging = false; scope.launch { delay(400); suppressClick = false } },
+                        onDragCancel = { dragging = false; scope.launch { delay(400); suppressClick = false } },
                     )
                 }
 
-            val onItemClick: (FileItem) -> Unit = { item ->
+            val onItemClick: (FileItem) -> Unit = click@{ item ->
+                if (suppressClick) return@click
                 when {
                     inSelection -> vm.toggleSelect(item.file)
                     item.isDir -> vm.open(item.file)
@@ -259,10 +285,9 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                     GridCells.Adaptive(104.dp), dragMod, state = gridState,
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 170.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
-                    userScrollEnabled = !dragging,
                 ) {
                     gridItems(list, key = { it.file.absolutePath }, contentType = { if (it.isDir) 0 else 1 }) { item ->
-                        GridCard(item, item.file in sel, inSelection) { onItemClick(item) }
+                        GridCard(item, item.file in sel, inSelection, item.file == vm.focusFile) { onItemClick(item) }
                     }
                 }
             } else {
@@ -270,10 +295,9 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                     dragMod, state = listState,
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 170.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
-                    userScrollEnabled = !dragging,
                 ) {
                     items(list, key = { it.file.absolutePath }, contentType = { if (it.isDir) 0 else 1 }) { item ->
-                        FileCard(item, item.file in sel, inSelection, onClick = { onItemClick(item) })
+                        FileCard(item, item.file in sel, inSelection, onClick = { onItemClick(item) }, highlight = item.file == vm.focusFile)
                     }
                 }
             }
@@ -419,12 +443,12 @@ private fun Breadcrumb(dir: File, root: File, onNav: (File) -> Unit) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FileCard(item: FileItem, selected: Boolean, selectionMode: Boolean, onClick: () -> Unit) {
+private fun FileCard(item: FileItem, selected: Boolean, selectionMode: Boolean, onClick: () -> Unit, highlight: Boolean = false) {
     val shape = RoundedCornerShape(22.dp)
     ElevatedCard(
         shape = shape,
         colors = CardDefaults.elevatedCardColors(
-            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else if (highlight) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
         ),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = if (selected) 0.dp else 2.dp),
     ) {
@@ -467,11 +491,11 @@ private fun FileCard(item: FileItem, selected: Boolean, selectionMode: Boolean, 
 }
 
 @Composable
-private fun GridCard(item: FileItem, selected: Boolean, selectionMode: Boolean, onClick: () -> Unit) {
+private fun GridCard(item: FileItem, selected: Boolean, selectionMode: Boolean, highlight: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(20.dp)
     Column(
         Modifier.fillMaxWidth().clip(shape)
-            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow)
+            .background(if (selected) MaterialTheme.colorScheme.primaryContainer else if (highlight) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerLow)
             .semantics(mergeDescendants = true) {
                 contentDescription = (if (item.isDir) "Cartella " else "File ") + item.name + (if (selected) ", selezionato" else "")
             }

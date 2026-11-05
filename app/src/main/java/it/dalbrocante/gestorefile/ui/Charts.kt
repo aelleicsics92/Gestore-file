@@ -35,16 +35,24 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun LegendCard(color: Color, title: String, subtitle: String, trailing: String, selected: Boolean, onClick: () -> Unit) {
+private fun LegendCard(
+    color: Color, title: String, subtitle: String, trailing: String, selected: Boolean,
+    checked: Boolean = false, selecting: Boolean = false, onLongClick: (() -> Unit)? = null, onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(20.dp)
     ElevatedCard(
-        onClick = onClick, shape = RoundedCornerShape(20.dp),
+        shape = shape,
         colors = CardDefaults.elevatedCardColors(
-            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+            containerColor = if (selected || checked) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
         ),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = if (selected) 0.dp else 2.dp),
     ) {
-        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth().clip(shape).combinedClickable(onClick = onClick, onLongClick = onLongClick).padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Box(Modifier.size(14.dp).clip(CircleShape).background(color))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -52,6 +60,12 @@ private fun LegendCard(color: Color, title: String, subtitle: String, trailing: 
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(trailing, fontWeight = FontWeight.Medium)
+            if (selecting) {
+                Icon(
+                    if (checked) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null,
+                    Modifier.padding(start = 8.dp), tint = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                )
+            }
         }
     }
 }
@@ -133,14 +147,29 @@ fun StatsScreen(vm: FileViewModel, onBack: () -> Unit, onOpenFile: (File) -> Uni
     var confirm by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(vm.currentDir, tick) {
-        cats = null
+        if (tick == 0) cats = null // dopo un'eliminazione resta visibile il grafico e si aggiorna in silenzio
         cats = withContext(Dispatchers.IO) { computeCats(vm.currentDir) }
     }
     BackHandler(sel.isNotEmpty()) { sel = emptySet() }
     if (confirm) TrashConfirm(sel.size, { confirm = false }) {
         confirm = false
         val victims = sel.toList(); sel = emptySet()
-        scope.launch { withContext(Dispatchers.IO) { victims.forEach { vm.repo.moveToTrash(it) } }; tick++; vm.refresh() }
+        scope.launch {
+            val sizes = withContext(Dispatchers.IO) {
+                victims.associateWith { v -> if (v.isDirectory) v.walkTopDown().filter { it.isFile }.sumOf { it.length() } else v.length() }
+                    .also { victims.forEach { vm.repo.moveToTrash(it) } }
+            }
+            // Aggiornamento immediato di torta ed elenco, poi ricalcolo esatto in background
+            cats = cats?.mapNotNull { c ->
+                val gone = c.top.filter { it in sizes }
+                if (gone.isEmpty()) c else {
+                    val n = c.count - gone.size; val sz = c.size - gone.sumOf { sizes[it] ?: 0L }
+                    if (n <= 0 || sz <= 0) null else c.copy(count = n, size = sz, top = c.top - gone.toSet())
+                }
+            }
+            selected = selected?.takeIf { it < (cats?.size ?: 0) }
+            tick++; vm.refresh()
+        }
     }
     Page2(if (sel.isNotEmpty()) "${sel.size} selezionati" else "Statistiche", { if (sel.isNotEmpty()) sel = emptySet() else onBack() }, actions = {
         if (sel.isNotEmpty()) SelectionActions(sel, vm, onCompress, { sel = emptySet() }) { confirm = true }
@@ -179,7 +208,7 @@ fun StatsScreen(vm: FileViewModel, onBack: () -> Unit, onOpenFile: (File) -> Uni
                             f, f in sel, sel.isNotEmpty(),
                             onClick = { if (sel.isNotEmpty()) sel = if (f in sel) sel - f else sel + f else onOpenFile(f) },
                             onLongClick = { sel = if (f in sel) sel - f else sel + f },
-                        ) { f.parentFile?.let { vm.open(it) }; onBack() }
+                        ) { vm.openAt(f); onBack() }
                     }
                 }
             }
@@ -208,10 +237,24 @@ fun StorageScreen(vm: FileViewModel, onBack: () -> Unit, onOpenFile: (File) -> U
     if (confirm) TrashConfirm(sel.size, { confirm = false }) {
         confirm = false
         val victims = sel.toList(); sel = emptySet()
-        scope.launch { withContext(Dispatchers.IO) { victims.forEach { vm.repo.moveToTrash(it) } }; tick++; vm.refresh() }
+        scope.launch {
+            val sizes = withContext(Dispatchers.IO) {
+                victims.associateWith { v -> if (v.isDirectory) v.walkTopDown().filter { it.isFile }.sumOf { it.length() } else v.length() }
+                    .also { victims.forEach { vm.repo.moveToTrash(it) } }
+            }
+            usage = usage?.mapNotNull { (f, s) ->
+                if (f == null) f to s else {
+                    val removed = sizes.filter { (v, _) -> v == f || v.path.startsWith(f.path + File.separator) }.values.sum()
+                    if (removed == 0L) f to s else if (s - removed <= 0 || sizes.containsKey(f)) null else f to (s - removed)
+                }
+            }
+            big = big.filter { it !in sizes }
+            selected = selected?.takeIf { it < (usage?.size ?: 0) }
+            tick++; vm.refresh()
+        }
     }
     LaunchedEffect(vm.currentDir, tick) {
-        usage = null; selected = null
+        if (tick == 0) { usage = null; selected = null }
         usage = withContext(Dispatchers.IO) {
             val all = Tools.usage(vm.currentDir).filter { it.second > 0 }
             val top = all.take(7).map { it.first as File? to it.second }
@@ -266,7 +309,12 @@ fun StorageScreen(vm: FileViewModel, onBack: () -> Unit, onOpenFile: (File) -> U
                         ChartPalette[i % ChartPalette.size], f?.name ?: "Altro (cartelle minori)",
                         if (f?.isDirectory == true) "Cartella" else if (f == null) "" else "File",
                         "${formatSize(s)}  ·  ${(s * 100 / total.coerceAtLeast(1))}%", selected == i,
-                    ) { if (f != null && f.isFile) onOpenFile(f) else selected = if (selected == i) null else i }
+                        checked = f != null && f in sel, selecting = sel.isNotEmpty() && f != null,
+                        onLongClick = if (f != null) ({ sel = if (f in sel) sel - f else sel + f }) else null,
+                    ) {
+                        if (f != null && sel.isNotEmpty()) sel = if (f in sel) sel - f else sel + f
+                        else if (f != null && f.isFile) onOpenFile(f) else selected = if (selected == i) null else i
+                    }
                 }
                 selected?.let { s ->
                     val f = u[s].first
@@ -280,7 +328,7 @@ fun StorageScreen(vm: FileViewModel, onBack: () -> Unit, onOpenFile: (File) -> U
                                 b, b in sel, sel.isNotEmpty(),
                                 onClick = { if (sel.isNotEmpty()) sel = if (b in sel) sel - b else sel + b else onOpenFile(b) },
                                 onLongClick = { sel = if (b in sel) sel - b else sel + b },
-                            ) { b.parentFile?.let { vm.open(it) }; onBack() }
+                            ) { vm.openAt(b); onBack() }
                         }
                     }
                 }

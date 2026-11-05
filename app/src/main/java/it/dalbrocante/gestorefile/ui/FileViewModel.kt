@@ -53,6 +53,14 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
     private val positions = HashMap<String, Pair<Int, Int>>()
     /** Posizione di scroll da ripristinare quando l'elenco della cartella corrente è pronto. */
     var restore by mutableStateOf<Pair<Int, Int>?>(null)
+    /** File da mettere a fuoco (scroll + evidenziazione) dopo l'apertura del suo percorso. */
+    var focusFile by mutableStateOf<File?>(null)
+
+    fun openAt(file: File) {
+        val dir = file.parentFile ?: return
+        focusFile = file
+        open(dir)
+    }
 
     private fun savePosition() {
         positions[currentDir.path] =
