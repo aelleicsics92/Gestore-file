@@ -95,8 +95,8 @@ private fun RowScope.SelectionActions(
     sel: Set<File>, vm: FileViewModel, onCompress: (List<File>) -> Unit, onClear: () -> Unit, onDelete: () -> Unit,
 ) {
     val ctx = LocalContext.current
-    IconButton({ vm.clipboard = sel.toList(); vm.clipMode = ClipMode.CUT; vm.message = "Pronti da spostare: apri la cartella e premi Incolla"; onClear() }) { Icon(Icons.Filled.DriveFileMove, "Sposta") }
-    IconButton({ vm.clipboard = sel.toList(); vm.clipMode = ClipMode.COPY; vm.message = "Copiati: apri la cartella e premi Incolla"; onClear() }) { Icon(Icons.Filled.ContentCopy, "Copia") }
+    IconButton({ vm.setClip(sel.toList(), ClipMode.CUT); vm.message = "Pronti da spostare: apri la cartella e premi Incolla"; onClear() }) { Icon(Icons.Filled.DriveFileMove, "Sposta") }
+    IconButton({ vm.setClip(sel.toList(), ClipMode.COPY); vm.message = "Copiati: apri la cartella e premi Incolla"; onClear() }) { Icon(Icons.Filled.ContentCopy, "Copia") }
     IconButton({ shareFiles(ctx, sel.toList()) }) { Icon(Icons.Filled.Share, "Condividi") }
     IconButton({ onCompress(sel.toList()); onClear() }) { Icon(Icons.Filled.FolderZip, "Comprimi in ZIP") }
     IconButton(onDelete) { Icon(Icons.Filled.Delete, "Elimina", tint = MaterialTheme.colorScheme.error) }

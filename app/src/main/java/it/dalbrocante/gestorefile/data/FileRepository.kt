@@ -1,5 +1,7 @@
 package it.dalbrocante.gestorefile.data
 
+import it.dalbrocante.gestorefile.util.IMAGE_EXT
+import it.dalbrocante.gestorefile.util.VIDEO_EXT
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -49,7 +51,7 @@ class FileRepository(private val trashDir: File) {
         val byName = compareBy<FileItem, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
         // AUTO: più recenti prima in Download e nelle cartelle di foto/video, altrimenti per nome
         val effective = if (sort != SortMode.AUTO) sort else {
-            val media = items.count { !it.isDir && (it.ext in it.dalbrocante.gestorefile.util.IMAGE_EXT || it.ext in it.dalbrocante.gestorefile.util.VIDEO_EXT) }
+            val media = items.count { !it.isDir && (it.ext in IMAGE_EXT || it.ext in VIDEO_EXT) }
             val files = items.count { !it.isDir }
             if (dir.name.equals("Download", true) || dir.name.equals("Downloads", true) || (files > 0 && media * 2 > files)) SortMode.DATE else SortMode.NAME
         }

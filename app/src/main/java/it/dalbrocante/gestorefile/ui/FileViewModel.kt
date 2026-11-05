@@ -107,6 +107,7 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun selectAll() { selection = items.map { it.file }.toSet() }
+    fun setClip(files: List<File>, mode: ClipMode) { clipboard = files; clipMode = mode }
     fun replaceSelection(s: Set<File>) { selection = s }
     fun clearSelection() { selection = emptySet() }
 
