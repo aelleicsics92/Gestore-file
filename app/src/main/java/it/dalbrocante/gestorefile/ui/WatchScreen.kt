@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -98,7 +99,7 @@ fun WatchScreen(onBack: () -> Unit) {
         }
     }
 
-    fun runOp(op: String, paths: List<String>, dst: String = "", name: String = "", ok: String = "Fatto") {
+    fun runOp(op: String, paths: List<String> = emptyList(), dst: String = "", name: String = "", ok: String = "Fatto") {
         scope.launch {
             val e = WearBridge.op(ctx, op, paths, dst, name)
             say(e ?: ok)
@@ -176,7 +177,7 @@ fun WatchScreen(onBack: () -> Unit) {
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
             Text(
                 path.ifEmpty { "…" }, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), maxLines = 1,
-                overflow = TextOverflow.StartEllipsis, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             error?.let {
                 Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
