@@ -61,6 +61,8 @@ import it.dalbrocante.gestorefile.ui.VaultScreen
 import it.dalbrocante.gestorefile.ui.ViewerScreen
 import it.dalbrocante.gestorefile.ui.hasInternalViewer
 import it.dalbrocante.gestorefile.util.Updater
+import it.dalbrocante.gestorefile.ui.WatchScreen
+import it.dalbrocante.gestorefile.wear.WearBridge
 import it.dalbrocante.gestorefile.util.openExternal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -86,6 +88,7 @@ private sealed interface Route {
     data object Remote : Route
     data object Cloud : Route
     data object Terminal : Route
+    data object Watch : Route
 }
 
 private fun routeName(r: Route): String = when (r) {
@@ -105,6 +108,7 @@ private fun routeName(r: Route): String = when (r) {
     Route.Remote -> "Remote"
     Route.Cloud -> "Cloud"
     Route.Terminal -> "Terminal"
+    Route.Watch -> "Watch"
 }
 
 private fun routeFrom(s: String?): Route {
@@ -124,6 +128,7 @@ private fun routeFrom(s: String?): Route {
         "Remote" -> Route.Remote
         "Cloud" -> Route.Cloud
         "Terminal" -> Route.Terminal
+        "Watch" -> Route.Watch
         else -> Route.Files
     }
 }
@@ -239,6 +244,13 @@ class MainActivity : FragmentActivity() {
             scan = { route = Route.Files; scanDocument() },
             linkFile = { linking = it },
             installApks = { ApkInstaller.start(this, it); vm.clearSelection() },
+            openWatch = { route = Route.Watch },
+            sendToWatch = { files ->
+                val items = WearBridge.expand(files)
+                if (items.isEmpty()) vm.message = "Niente da inviare"
+                else { WearBridge.enqueue(this, items, ""); vm.message = "Invio di ${items.size} file all'orologio (cartella Telefono)" }
+                vm.clearSelection()
+            },
         )
 
         when (val r = (route as? Route.Viewer)?.under ?: route) {
@@ -258,6 +270,7 @@ class MainActivity : FragmentActivity() {
             Route.Remote -> RemoteScreen(vm, openFile) { route = Route.Files }
             Route.Cloud -> CloudScreen(vm, openFile) { route = Route.Files }
             Route.Terminal -> TerminalScreen(vm) { route = Route.Files }
+            Route.Watch -> WatchScreen { route = Route.Files }
         }
 
         // Il viewer è un overlay: la schermata sotto (statistiche, spazio, elenco) resta viva con scroll e stato

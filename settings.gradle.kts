@@ -16,3 +16,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "GestoreFile"
 include(":app")
+include(":shared")
+include(":wear")

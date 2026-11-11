@@ -55,6 +55,8 @@ android {
 }
 
 dependencies {
+    implementation(project(":shared"))
+    implementation("com.google.android.gms:play-services-wearable:18.2.0")
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")

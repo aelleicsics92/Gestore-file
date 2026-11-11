@@ -25,7 +25,8 @@ object Updater {
         c.connectTimeout = 10000; c.readTimeout = 10000
         val o = JSONObject(c.inputStream.bufferedReader().readText())
         val build = Regex("\\d+").find(o.optString("name"))?.value?.toInt() ?: return null
-        val asset = o.getJSONArray("assets").getJSONObject(0)
+        val assets = o.getJSONArray("assets")
+        val asset = (0 until assets.length()).map { assets.getJSONObject(it) }.firstOrNull { it.getString("name") == "GestoreFile.apk" } ?: return null
         Info(build, asset.getString("browser_download_url"))
     }.getOrNull()
 

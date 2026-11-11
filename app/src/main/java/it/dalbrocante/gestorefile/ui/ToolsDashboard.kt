@@ -57,6 +57,7 @@ fun ToolsScreen(vm: FileViewModel, nav: Nav, onBack: () -> Unit, onVault: () -> 
         "Rete e cloud" to listOf(
             Tile(Icons.Filled.Dns, "FTP, SFTP, SMB", Color(0xFF0EA5E9)) { nav.openRemote() },
             Tile(Icons.Filled.Cloud, "Cloud e memorie esterne", Color(0xFF3B82F6)) { nav.openCloud() },
+            Tile(Icons.Filled.Watch, "Orologio (Wear OS)", Color(0xFF14B8A6)) { nav.openWatch() },
             Tile(Icons.Filled.Wifi, "Server FTP sul telefono", Color(0xFF14B8A6)) { panel = Panel.FTP },
         ),
         "Sicurezza e avanzate" to listOf(
