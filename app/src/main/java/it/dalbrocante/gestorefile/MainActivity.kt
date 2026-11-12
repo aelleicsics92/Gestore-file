@@ -164,6 +164,9 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Avvio "a freddo" (app chiusa dall'utente): riparte dal percorso originario.
+        // Se invece il sistema ripristina l'app dallo sfondo, savedInstanceState non è nullo e la posizione resta.
+        if (savedInstanceState == null) getSharedPreferences("nav_state", MODE_PRIVATE).edit().clear().commit()
         it.dalbrocante.gestorefile.ui.AppPrefs.init(this)
         setContent {
             GestoreTheme {
