@@ -87,6 +87,7 @@ fun WatchApp(vm: WatchVm) {
                     item(key = "header") {
                         val title = when {
                             vm.menu != null -> "Azioni"
+                            vm.phoneMode -> if (vm.selection.isNotEmpty()) "✓ ${vm.selection.size} selezionati" else "Telefono"
                             vm.dir == null -> "Gestore file"
                             vm.selection.isNotEmpty() -> "✓ ${vm.selection.size} selezionati"
                             else -> vm.dir!!.name.ifEmpty { "/" }

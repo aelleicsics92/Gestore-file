@@ -47,8 +47,9 @@ class MainActivity : ComponentActivity() {
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
         if (isStem(keyCode)) {
             if (event.flags and KeyEvent.FLAG_CANCELED_LONG_PRESS == 0) {
+                val atHome = vm.dir == null && !vm.phoneMode && vm.menu == null
                 vm.onKey(keyCode, false)
-                if (keyCode == KeyEvent.KEYCODE_STEM_2 && vm.dir == null && vm.menu == null) finish()
+                if (keyCode == KeyEvent.KEYCODE_STEM_2 && atHome) finish()
             }
             return true
         }

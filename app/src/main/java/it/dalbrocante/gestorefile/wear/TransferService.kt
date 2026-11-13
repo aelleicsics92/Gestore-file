@@ -40,7 +40,7 @@ class TransferService : Service() {
         while (true) {
             val (items, dst) = WearBridge.next() ?: break
             for (item in items) {
-                runCatching { WearBridge.sendOne(this, node, item, dst) }
+                runCatching { WearBridge.sendOne(this, node.id, item, dst) }
                     .onSuccess { WearBridge.update { s -> s.copy(done = s.done + 1, label = item.rel, tick = s.tick + 1) } }
                     .onFailure { e -> failed = e.message ?: "Invio non riuscito"; WearBridge.update { s -> s.copy(done = s.done + 1) } }
                 val s = WearBridge.transfer.value

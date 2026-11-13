@@ -100,9 +100,9 @@ object WearBridge {
 
     fun next(): Pair<List<SendItem>, String>? = queue.poll()
 
-    suspend fun sendOne(ctx: Context, node: Node, item: SendItem, dstDir: String) = withContext(Dispatchers.IO) {
+    suspend fun sendOne(ctx: Context, nodeId: String, item: SendItem, dstDir: String) = withContext(Dispatchers.IO) {
         val cc = Wearable.getChannelClient(ctx)
-        val ch = Tasks.await(cc.openChannel(node.id, Proto.CH_FILE))
+        val ch = Tasks.await(cc.openChannel(nodeId, Proto.CH_FILE))
         val out = Tasks.await(cc.getOutputStream(ch))
         out.use { o ->
             writeHeader(o, dstDir, item.rel, item.size)

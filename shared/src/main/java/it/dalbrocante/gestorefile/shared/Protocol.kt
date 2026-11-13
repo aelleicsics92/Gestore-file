@@ -17,6 +17,8 @@ object Proto {
     const val P_PULL = "/fm/pull"
     const val P_INFO = "/fm/info"
     const val CH_FILE = "/fm/file"
+    const val P_PHONE_LIST = "/fm/phone/list"
+    const val P_PHONE_SEND = "/fm/phone/send"
 }
 
 data class Entry(val name: String, val path: String, val isDir: Boolean, val size: Long, val modified: Long)
