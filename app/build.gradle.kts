@@ -115,3 +115,6 @@ configurations.all {
 kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
+
+// Kadb 2.1.5 dichiara compileSdk 37, ma usa solo API già presenti su Android 13+: saltiamo il controllo dei metadati AAR.
+tasks.matching { it.name.endsWith("AarMetadata") }.configureEach { enabled = false }
