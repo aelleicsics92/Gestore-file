@@ -35,6 +35,7 @@ class MainActivity : ComponentActivity() {
 
     // Pulsanti fisici: pressione breve e lunga distinte.
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        vm.lastKey = keyCode
         if (isStem(keyCode)) { event.startTracking(); return true }
         return super.onKeyDown(keyCode, event)
     }

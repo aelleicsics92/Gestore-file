@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -100,6 +102,17 @@ fun WatchApp(vm: WatchVm) {
                             onLong = { vm.cursor = i; vm.longPress(r) })
                     }
                 }
+                // Scorri dall'alto verso il basso: indietro / cartella superiore
+                Box(
+                    Modifier.align(Alignment.TopCenter).fillMaxWidth().height(40.dp).pointerInput(Unit) {
+                        var total = 0f
+                        detectVerticalDragGestures(
+                            onDragStart = { total = 0f },
+                            onDragCancel = { total = 0f },
+                            onDragEnd = { if (total > 50f) { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.back() } },
+                        ) { _, dy -> total += dy }
+                    },
+                )
                 vm.message?.let {
                     Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 26.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xE6000000)).padding(horizontal = 10.dp, vertical = 5.dp)) {
                         Text(it, fontSize = 12.sp, maxLines = 2)

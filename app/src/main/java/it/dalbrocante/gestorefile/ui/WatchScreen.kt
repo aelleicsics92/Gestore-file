@@ -62,6 +62,7 @@ fun WatchScreen(onBack: () -> Unit) {
     var clip by remember { mutableStateOf<List<String>>(emptyList()) }
     var clipCut by remember { mutableStateOf(false) }
     var dlg by remember { mutableStateOf<WDlg?>(null) }
+    var showInstall by remember { mutableStateOf(false) }
 
     fun load(p: String = path) {
         scope.launch {
@@ -167,6 +168,9 @@ fun WatchScreen(onBack: () -> Unit) {
         },
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
+            TextButton({ showInstall = true }, Modifier.padding(horizontal = 8.dp)) {
+                Icon(Icons.Filled.Wifi, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Installa o aggiorna app orologio via Wi-Fi")
+            }
             watchUpdate?.let { u ->
                 Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.tertiaryContainer) {
                     Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -250,6 +254,8 @@ fun WatchScreen(onBack: () -> Unit) {
             }
         }
     }
+
+    if (showInstall) WatchInstallDialog { showInstall = false }
 
     when (val d = dlg) {
         WDlg.NewFolder -> InputDialog("Nuova cartella", "Nome", onDismiss = { dlg = null }) { n -> dlg = null; runOp("mkdir", dst = path, name = n) }

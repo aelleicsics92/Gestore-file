@@ -28,7 +28,7 @@ import java.io.File
 import kotlin.math.abs
 
 enum class Kind { HOME, DIR, FILE, ACTION, DANGER, INFO }
-enum class Act { OPEN_STORAGE, OPEN_RECEIVED, GRANT, KEYS, UPDATE, UP, COPY, CUT, DELETE, CONFIRM_DELETE, INFO, SELALL, SELNONE, PASTE, MKDIR, HIDDEN, CLOSE, INSTALL, INSTALL_RECEIVED, OPEN_PHONE, PHONE_GET }
+enum class Act { OPEN_STORAGE, OPEN_RECEIVED, GRANT, KEYS, UPDATE, UP, COPY, CUT, DELETE, CONFIRM_DELETE, INFO, SELALL, SELNONE, PASTE, MKDIR, HIDDEN, CLOSE, INSTALL, INSTALL_RECEIVED, OPEN_PHONE, PHONE_GET, MENU }
 enum class Menu { MAIN, CONFIRM, INFO, KEYS, PHONE }
 
 data class Row(val id: String, val title: String, val sub: String = "", val kind: Kind, val file: File? = null, val act: Act? = null)
@@ -50,6 +50,7 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
     var update by mutableStateOf("Cerca aggiornamenti")
     var permTick by mutableIntStateOf(0)
     var pendingApk by mutableStateOf<File?>(null)
+    var lastKey by mutableIntStateOf(0)
     var phoneMode by mutableStateOf(false)
     var pPath by mutableStateOf("")
     var pParent by mutableStateOf<String?>(null)
@@ -71,6 +72,7 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
             if (phoneMode) return phoneRows()
             val d = dir ?: return homeRows()
             val list = ArrayList<Row>()
+            if (selection.isNotEmpty()) list += Row("sel_act", "Azioni (${selection.size})", kind = Kind.ACTION, act = Act.MENU)
             list += Row("up", "Su", d.name.ifEmpty { "/" }, Kind.ACTION, act = Act.UP)
             entries.forEach {
                 list += Row(it.path, it.name, if (it.isDir) "Cartella" else formatSize(it.size), if (it.isDir) Kind.DIR else Kind.FILE, File(it.path))
@@ -93,6 +95,7 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
 
     private fun phoneRows(): List<Row> {
         val list = ArrayList<Row>()
+        if (selection.isNotEmpty()) list += Row("sel_act", "Azioni (${selection.size})", kind = Kind.ACTION, act = Act.MENU)
         list += Row("up", "Su", pPath.substringAfterLast('/').ifEmpty { "Telefono" }, Kind.ACTION, act = Act.UP)
         pEntries.forEach {
             list += Row(it.path, it.name, if (it.isDir) "Cartella" else formatSize(it.size), if (it.isDir) Kind.DIR else Kind.FILE, File(it.path))
@@ -140,10 +143,11 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
             Row("k1", "Ghiera: sposta il cursore", kind = Kind.INFO),
             Row("k2", "Pulsante 1: apri / azioni", kind = Kind.INFO),
             Row("k3", "Pulsante 1 lungo: seleziona", kind = Kind.INFO),
-            Row("k4", "Pulsante 2: indietro", kind = Kind.INFO),
-            Row("k5", "Pulsante 2 lungo: menu azioni", kind = Kind.INFO),
+            Row("k4", "Scorri dall'alto verso il basso: indietro", kind = Kind.INFO),
+            Row("k5", "Con selezione: riga Azioni in alto", kind = Kind.INFO),
             Row("k6", "Pulsante 3: file nascosti", kind = Kind.INFO),
             Row("k7", "Se un pulsante non risponde, usa il tocco", kind = Kind.INFO),
+            Row("k9", "Ultimo tasto: ${android.view.KeyEvent.keyCodeToString(lastKey)}", kind = Kind.INFO),
             Row("k8", "Chiudi", kind = Kind.ACTION, act = Act.CLOSE),
         )
     }
@@ -251,6 +255,7 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
             Act.INFO -> { menu = Menu.INFO; cursor = 0 }
             Act.SELALL -> { selection = (if (phoneMode) pEntries else entries).map { it.path }.toSet(); closeMenu() }
             Act.OPEN_PHONE -> openPhone("")
+            Act.MENU -> openMenu(if (phoneMode) Menu.PHONE else Menu.MAIN, selection.map { File(it) })
             Act.PHONE_GET -> { val t = menuTargets.map { it.path }; val dst = received.absolutePath; closeMenu(); selection = emptySet(); phoneGet(t, dst) }
             Act.SELNONE -> { selection = emptySet(); closeMenu() }
             Act.PASTE -> {
@@ -346,8 +351,8 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
                 i == null -> update = "Aggiornamento non disponibile"
                 i.build <= BuildConfig.BUILD_NUMBER -> update = "App aggiornata"
                 else -> {
-                    update = "Scarico build ${i.build}…"
-                    runCatching { WatchUpdater.install(ctx, WatchUpdater.download(ctx, i.url)) }
+                    update = "Scarico build ${i.build}… 0%"
+                    runCatching { WatchUpdater.install(ctx, WatchUpdater.download(ctx, i.url) { p -> update = "Scarico build ${i.build}… $p%" }) }
                         .onSuccess { update = "Conferma l'installazione" }
                         .onFailure { update = "Errore aggiornamento" }
                 }

@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -39,9 +41,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -56,6 +55,8 @@ android {
 
 dependencies {
     implementation(project(":shared"))
+    implementation("com.flyfishxu:kadb:2.1.5")
+    implementation("com.squareup.okio:okio:3.18.2")
     implementation("com.google.android.gms:play-services-wearable:18.2.0")
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
     implementation(composeBom)
@@ -109,4 +110,8 @@ dependencies {
 // pdfbox-android e smbj portano due varianti di BouncyCastle: teniamo solo jdk18on.
 configurations.all {
     exclude(group = "org.bouncycastle", module = "bcprov-jdk15to18")
+}
+
+kotlin {
+    compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }

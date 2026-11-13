@@ -27,11 +27,21 @@ object WatchUpdater {
         Info(build, a.getString("browser_download_url"))
     }.getOrNull()
 
-    fun download(ctx: Context, url: String): File {
+    fun download(ctx: Context, url: String, onProgress: (Int) -> Unit = {}): File {
         val out = File(ctx.cacheDir, "update.apk")
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = 15000; c.readTimeout = 60000
-        c.inputStream.use { i -> out.outputStream().use { o -> i.copyTo(o, 64 * 1024) } }
+        val total = c.contentLengthLong
+        c.inputStream.use { i ->
+            out.outputStream().use { o ->
+                val buf = ByteArray(64 * 1024); var done = 0L; var last = -1
+                while (true) {
+                    val n = i.read(buf); if (n < 0) break
+                    o.write(buf, 0, n); done += n
+                    if (total > 0) { val p = (done * 100 / total).toInt(); if (p != last) { last = p; onProgress(p) } }
+                }
+            }
+        }
         return out
     }
 
