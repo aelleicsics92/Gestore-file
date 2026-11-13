@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
         setContent { WatchApp(vm) }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         vm.refreshStatus()
         vm.open(vm.root.takeIf { it.canRead() } ?: return)
