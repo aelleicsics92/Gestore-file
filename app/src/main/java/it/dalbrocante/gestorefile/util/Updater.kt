@@ -34,7 +34,7 @@ object Updater {
 
     fun isNewer(i: Info) = i.build > currentBuild()
 
-    fun download(ctx: Context, url: String, onProgress: (Int) -> Unit, fileName: String = "update.apk"): File {
+    fun download(ctx: Context, url: String, fileName: String = "update.apk", onProgress: (Int) -> Unit): File {
         val out = File(ctx.cacheDir, fileName)
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = 15000; c.readTimeout = 30000

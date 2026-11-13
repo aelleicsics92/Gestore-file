@@ -174,7 +174,7 @@ fun WatchScreen(onBack: () -> Unit) {
                         Button({
                             scope.launch {
                                 say("Scarico l'aggiornamento…")
-                                val f = withContext(Dispatchers.IO) { runCatching { Updater.download(ctx, u.url, {}, "GestoreFileWatch.apk") }.getOrNull() }
+                                val f = withContext(Dispatchers.IO) { runCatching { Updater.download(ctx, u.url, "GestoreFileWatch.apk") {} }.getOrNull() }
                                 if (f == null) say("Download non riuscito")
                                 else {
                                     WearBridge.enqueue(ctx, listOf(SendItem(android.net.Uri.fromFile(f), "GestoreFileWatch.apk", f.length())), "")
