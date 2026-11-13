@@ -6,18 +6,9 @@ jobs:
   x:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: 17 }
-      - name: Inspect kadb
+      - name: Versions
         run: |
-          B=https://repo1.maven.org/maven2/com/flyfishxu
-          echo "== groups"; curl -s $B/ | grep -o 'href="[^"]*"'
-          for a in kadb kadb-jvm kadb-android; do echo "== $a"; curl -s $B/$a/2.1.5/ | grep -o 'href="[^"]*"'; done
-          mkdir -p w && cd w
-          curl -sfL $B/kadb-jvm/2.1.5/kadb-jvm-2.1.5.jar -o k.jar || true
-          curl -sfL $B/kadb-android/2.1.5/kadb-android-2.1.5.aar -o k.aar && unzip -oq k.aar classes.jar && mv classes.jar k.jar || true
-          ls -la
-          unzip -l k.jar | grep -E "Kadb|KadbCert|Pair|KeyStore|AdbKeyPair" | head -40
-          for c in com.flyfishxu.kadb.cert.OkioFilePrivateKeyStore com.flyfishxu.kadb.Kadb_androidKt com.flyfishxu.kadb.KadbKt com.flyfishxu.kadb.cert.KadbPrivateKeyStore com.flyfishxu.kadb.KadbOptions com.flyfishxu.kadb.cert.KadbCertPolicy; do echo "== $c"; javap -p -cp k.jar "$c" 2>&1 | head -40; done
-          echo "== pair defaults"; javap -p -c -cp k.jar 'com.flyfishxu.kadb.Kadb$Companion' | grep -A40 'pair\$default' | grep -E "ldc|iconst|bipush|invoke" | head -20
-          echo "== pom"; curl -s $B/kadb-android/2.1.5/kadb-android-2.1.5.pom | grep -E "artifactId|version" | head -30
+          B=https://repo1.maven.org/maven2/com/flyfishxu/kadb-android
+          for v in $(curl -s $B/maven-metadata.xml | grep -o '<version>[^<]*' | sed 's/<version>//'); do
+            echo "v=$v kotlin=$(curl -s $B/$v/kadb-android-$v.pom | grep -A1 'kotlin-stdlib' | grep -o '<version>[^<]*' | head -1)"
+          done
