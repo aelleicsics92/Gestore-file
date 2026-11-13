@@ -1,0 +1,21 @@
+name: inspect
+on:
+  push:
+    branches: [inspect]
+jobs:
+  x:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - name: Inspect kadb
+        run: |
+          B=https://repo1.maven.org/maven2/com/flyfishxu
+          echo "== groups"; curl -s $B/ | grep -o 'href="[^"]*"'
+          for a in kadb kadb-jvm kadb-android; do echo "== $a"; curl -s $B/$a/2.1.5/ | grep -o 'href="[^"]*"'; done
+          mkdir -p w && cd w
+          curl -sfL $B/kadb-jvm/2.1.5/kadb-jvm-2.1.5.jar -o k.jar || true
+          curl -sfL $B/kadb-android/2.1.5/kadb-android-2.1.5.aar -o k.aar && unzip -oq k.aar classes.jar && mv classes.jar k.jar || true
+          ls -la
+          unzip -l k.jar | grep -E "Kadb|KadbCert|Pair|KeyStore|AdbKeyPair" | head -40
+          for c in com.flyfishxu.kadb.Kadb 'com.flyfishxu.kadb.Kadb$Companion' com.flyfishxu.kadb.cert.KadbCert; do echo "== $c"; javap -cp k.jar "$c" 2>&1 | head -60; done
