@@ -11,6 +11,11 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // spake2-java (dipendenza di Kadb) è pubblicata solo su JitPack
+        maven {
+            url = uri("https://jitpack.io")
+            content { includeGroup("com.github.Flyfish233") }
+        }
     }
 }
 
