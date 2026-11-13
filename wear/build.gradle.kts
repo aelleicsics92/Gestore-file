@@ -12,7 +12,7 @@ android {
         // Stesso applicationId del telefono: obbligatorio per far dialogare le due app via Data Layer.
         applicationId = "it.dalbrocante.gestorefile"
         minSdk = 30
-        targetSdk = 34
+        targetSdk = 28 // volutamente basso: permette il permesso classico Archiviazione, l'unico richiedibile su Wear OS
         val run = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionCode = 100 + run
         versionName = "0.3.$run"

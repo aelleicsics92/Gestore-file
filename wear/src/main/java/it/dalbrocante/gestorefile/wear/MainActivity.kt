@@ -19,7 +19,16 @@ class MainActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() { if (!vm.back()) finish() }
         })
+        vm.permRequester = {
+            requestPermissions(arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE, android.Manifest.permission.WRITE_EXTERNAL_STORAGE), 1)
+        }
         setContent { WatchApp(vm) }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        vm.refreshStatus()
+        vm.open(vm.root.takeIf { it.canRead() } ?: return)
     }
 
     override fun onResume() { super.onResume(); vm.refreshStatus() }

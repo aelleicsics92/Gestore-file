@@ -43,6 +43,8 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
     var showHidden by mutableStateOf(false)
     var phone by mutableStateOf("Telefono: controllo…")
     var update by mutableStateOf("Cerca aggiornamenti")
+    var permTick by mutableIntStateOf(0)
+    var permRequester: (() -> Unit)? = null
     private var savedCursor = 0
     private var acc = 0f
 
@@ -65,9 +67,10 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
         }
 
     private fun homeRows(): List<Row> = buildList {
-        add(Row("storage", "Memoria", if (WatchStorage.hasAll()) "Tutto l'orologio" else "Solo cartella dell'app", Kind.HOME, act = Act.OPEN_STORAGE))
+        permTick
+        add(Row("storage", "Memoria", if (WatchStorage.hasAll(ctx)) "Tutto l'orologio" else "Solo cartella dell'app", Kind.HOME, act = Act.OPEN_STORAGE))
         add(Row("recv", "Ricevuti dal telefono", received.name, Kind.HOME, act = Act.OPEN_RECEIVED))
-        if (!WatchStorage.hasAll()) add(Row("grant", "Consenti tutti i file", "Tocca per abilitare", Kind.ACTION, act = Act.GRANT))
+        if (!WatchStorage.hasAll(ctx)) add(Row("grant", "Consenti tutti i file", "Tocca per abilitare", Kind.ACTION, act = Act.GRANT))
         add(Row("phone", phone, "", Kind.INFO))
         add(Row("keys", "Guida pulsanti", "", Kind.HOME, act = Act.KEYS))
         add(Row("upd", update, "Versione ${BuildConfig.BUILD_NUMBER}", Kind.HOME, act = Act.UPDATE))
@@ -198,9 +201,7 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
         when (a) {
             Act.OPEN_STORAGE -> open(root)
             Act.OPEN_RECEIVED -> open(received)
-            Act.GRANT -> runCatching {
-                ctx.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            }.onFailure { flash("Apri Impostazioni > App > Gestore file > Permessi") }
+            Act.GRANT -> permRequester?.invoke()
             Act.KEYS -> { savedCursor = cursor; menu = Menu.KEYS; cursor = 0 }
             Act.UPDATE -> checkUpdate()
             Act.UP -> back()
@@ -241,6 +242,7 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
 
     // ---------- stato ----------
     fun refreshStatus() {
+        permTick++
         Wearable.getCapabilityClient(ctx).getCapability(Proto.CAP_PHONE, CapabilityClient.FILTER_REACHABLE)
             .addOnSuccessListener { c ->
                 phone = c.nodes.firstOrNull()?.let { "Telefono: ${it.displayName}" } ?: "Telefono non collegato"

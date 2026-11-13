@@ -6,14 +6,16 @@ import java.text.DateFormat
 import java.util.Date
 
 object WatchStorage {
-    fun hasAll(): Boolean = Environment.isExternalStorageManager()
+    fun hasAll(ctx: Context): Boolean =
+        Environment.isExternalStorageManager() ||
+            ctx.checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
     /** Radice visibile: tutta la memoria se concesso "tutti i file", altrimenti la cartella dell'app. */
     fun root(ctx: Context): java.io.File =
-        if (hasAll()) Environment.getExternalStorageDirectory() else (ctx.getExternalFilesDir(null) ?: ctx.filesDir)
+        if (hasAll(ctx)) Environment.getExternalStorageDirectory() else (ctx.getExternalFilesDir(null) ?: ctx.filesDir)
 
     fun receiveDir(ctx: Context): java.io.File {
-        val base = if (hasAll()) java.io.File(root(ctx), "Download") else root(ctx)
+        val base = if (hasAll(ctx)) java.io.File(root(ctx), "Download") else root(ctx)
         return java.io.File(base, "Telefono").also { it.mkdirs() }
     }
 }
