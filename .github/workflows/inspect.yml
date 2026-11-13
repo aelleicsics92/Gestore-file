@@ -18,4 +18,6 @@ jobs:
           curl -sfL $B/kadb-android/2.1.5/kadb-android-2.1.5.aar -o k.aar && unzip -oq k.aar classes.jar && mv classes.jar k.jar || true
           ls -la
           unzip -l k.jar | grep -E "Kadb|KadbCert|Pair|KeyStore|AdbKeyPair" | head -40
-          for c in com.flyfishxu.kadb.Kadb 'com.flyfishxu.kadb.Kadb$Companion' com.flyfishxu.kadb.cert.KadbCert; do echo "== $c"; javap -cp k.jar "$c" 2>&1 | head -60; done
+          for c in com.flyfishxu.kadb.cert.OkioFilePrivateKeyStore com.flyfishxu.kadb.Kadb_androidKt com.flyfishxu.kadb.KadbKt com.flyfishxu.kadb.cert.KadbPrivateKeyStore com.flyfishxu.kadb.KadbOptions com.flyfishxu.kadb.cert.KadbCertPolicy; do echo "== $c"; javap -p -cp k.jar "$c" 2>&1 | head -40; done
+          echo "== pair defaults"; javap -p -c -cp k.jar 'com.flyfishxu.kadb.Kadb$Companion' | grep -A40 'pair\$default' | grep -E "ldc|iconst|bipush|invoke" | head -20
+          echo "== pom"; curl -s $B/kadb-android/2.1.5/kadb-android-2.1.5.pom | grep -E "artifactId|version" | head -30
