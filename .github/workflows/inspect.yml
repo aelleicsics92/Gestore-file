@@ -1,0 +1,18 @@
+name: inspect
+on:
+  push:
+    branches: [inspect6]
+jobs:
+  x:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - name: Inspect 1.3.0
+        run: |
+          B=https://repo1.maven.org/maven2/com/flyfishxu/kadb-android
+          curl -sfL $B/1.3.0/kadb-android-1.3.0.aar -o k.aar && unzip -oq k.aar classes.jar
+          echo "RES == classes"; unzip -l classes.jar | grep -E "cert/|Kadb" | awk '{print "RES " $4}'
+          for c in com.flyfishxu.kadb.cert.KadbCert 'com.flyfishxu.kadb.cert.KadbCert$Companion' com.flyfishxu.kadb.cert.AdbKeyPair; do echo "RES == $c"; javap -cp classes.jar "$c" 2>&1 | sed 's/^/RES /' | head -30; done
+          echo "RES == Companion"; javap -cp classes.jar 'com.flyfishxu.kadb.Kadb$Companion' | sed 's/^/RES /'
+          echo "RES == Kadb"; javap -cp classes.jar 'com.flyfishxu.kadb.Kadb' | grep -E "install|pair|create" | sed 's/^/RES /'
