@@ -26,7 +26,11 @@ import it.dalbrocante.gestorefile.shared.Entry
 import it.dalbrocante.gestorefile.shared.WatchInfo
 import it.dalbrocante.gestorefile.util.formatDate
 import it.dalbrocante.gestorefile.util.formatSize
+import it.dalbrocante.gestorefile.util.Updater
+import it.dalbrocante.gestorefile.wear.SendItem
 import it.dalbrocante.gestorefile.wear.WearBridge
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -73,6 +77,12 @@ fun WatchScreen(onBack: () -> Unit) {
     fun say(msg: String) { scope.launch { snack.showSnackbar(msg) } }
 
     LaunchedEffect(Unit) { load("") }
+    var watchUpdate by remember { mutableStateOf<Updater.Info?>(null) }
+    LaunchedEffect(info) {
+        val i = info ?: return@LaunchedEffect
+        val latest = withContext(Dispatchers.IO) { Updater.checkAsset("GestoreFileWatch.apk") }
+        watchUpdate = latest?.takeIf { it.build > i.build }
+    }
     // ricarica l'elenco quando termina un trasferimento
     LaunchedEffect(transfer.tick) { if (transfer.tick > 0) { delay(400); load() } }
 
@@ -157,6 +167,25 @@ fun WatchScreen(onBack: () -> Unit) {
         },
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
+            watchUpdate?.let { u ->
+                Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.tertiaryContainer) {
+                    Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Aggiornamento orologio: build ${u.build}", Modifier.weight(1f))
+                        Button({
+                            scope.launch {
+                                say("Scarico l'aggiornamento…")
+                                val f = withContext(Dispatchers.IO) { runCatching { Updater.download(ctx, u.url, {}, "GestoreFileWatch.apk") }.getOrNull() }
+                                if (f == null) say("Download non riuscito")
+                                else {
+                                    WearBridge.enqueue(ctx, listOf(SendItem(android.net.Uri.fromFile(f), "GestoreFileWatch.apk", f.length())), "")
+                                    watchUpdate = null
+                                    say("Inviato: sull'orologio tocca \"Installa aggiornamento\"")
+                                }
+                            }
+                        }) { Text("Invia") }
+                    }
+                }
+            }
             if (transfer.active || transfer.total > 0 || transfer.error != null) {
                 Surface(
                     Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), shape = RoundedCornerShape(16.dp),

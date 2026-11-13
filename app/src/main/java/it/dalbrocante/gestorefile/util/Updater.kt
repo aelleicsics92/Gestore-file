@@ -19,21 +19,23 @@ object Updater {
 
     fun currentBuild(): Int = BuildConfig.VERSION_CODE - 100
 
-    fun check(): Info? = runCatching {
+    fun check(): Info? = checkAsset("GestoreFile.apk")
+
+    fun checkAsset(assetName: String): Info? = runCatching {
         val c = URL(API).openConnection() as HttpURLConnection
         c.setRequestProperty("Accept", "application/vnd.github+json")
         c.connectTimeout = 10000; c.readTimeout = 10000
         val o = JSONObject(c.inputStream.bufferedReader().readText())
         val build = Regex("\\d+").find(o.optString("name"))?.value?.toInt() ?: return null
         val assets = o.getJSONArray("assets")
-        val asset = (0 until assets.length()).map { assets.getJSONObject(it) }.firstOrNull { it.getString("name") == "GestoreFile.apk" } ?: return null
+        val asset = (0 until assets.length()).map { assets.getJSONObject(it) }.firstOrNull { it.getString("name") == assetName } ?: return null
         Info(build, asset.getString("browser_download_url"))
     }.getOrNull()
 
     fun isNewer(i: Info) = i.build > currentBuild()
 
-    fun download(ctx: Context, url: String, onProgress: (Int) -> Unit): File {
-        val out = File(ctx.cacheDir, "update.apk")
+    fun download(ctx: Context, url: String, onProgress: (Int) -> Unit, fileName: String = "update.apk"): File {
+        val out = File(ctx.cacheDir, fileName)
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = 15000; c.readTimeout = 30000
         val total = c.contentLength.toLong()

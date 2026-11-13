@@ -50,9 +50,13 @@ object WatchUpdater {
 class InstallResultReceiver : BroadcastReceiver() {
     @Suppress("DEPRECATION")
     override fun onReceive(ctx: Context, intent: Intent) {
-        if (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, -1) == PackageInstaller.STATUS_PENDING_USER_ACTION) {
-            val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
-            ctx.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        when (val st = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, -1)) {
+            PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
+                ctx.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+            PackageInstaller.STATUS_SUCCESS -> android.widget.Toast.makeText(ctx, "Installato", android.widget.Toast.LENGTH_LONG).show()
+            else -> android.widget.Toast.makeText(ctx, "Installazione non riuscita (${intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: st})", android.widget.Toast.LENGTH_LONG).show()
         }
     }
 }

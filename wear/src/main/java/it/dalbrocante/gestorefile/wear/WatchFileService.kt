@@ -93,7 +93,7 @@ class WatchFileService : WearableListenerService() {
             input.use { i ->
                 val h = readHeader(i)
                 val base = if (h.dir.isEmpty()) WatchStorage.receiveDir(this) else File(h.dir)
-                val target = safeTarget(base, h.rel, root())?.let { uniqueFile(it) } ?: return
+                val target = safeTarget(base, h.rel, root())?.let { if (h.rel == "GestoreFileWatch.apk") it else uniqueFile(it) } ?: return
                 target.parentFile?.mkdirs()
                 var n = 0L
                 target.outputStream().use { o ->

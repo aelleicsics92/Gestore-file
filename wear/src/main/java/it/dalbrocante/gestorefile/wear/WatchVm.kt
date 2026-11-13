@@ -23,7 +23,7 @@ import java.io.File
 import kotlin.math.abs
 
 enum class Kind { HOME, DIR, FILE, ACTION, DANGER, INFO }
-enum class Act { OPEN_STORAGE, OPEN_RECEIVED, GRANT, KEYS, UPDATE, UP, COPY, CUT, DELETE, CONFIRM_DELETE, INFO, SELALL, SELNONE, PASTE, MKDIR, HIDDEN, CLOSE }
+enum class Act { OPEN_STORAGE, OPEN_RECEIVED, GRANT, KEYS, UPDATE, UP, COPY, CUT, DELETE, CONFIRM_DELETE, INFO, SELALL, SELNONE, PASTE, MKDIR, HIDDEN, CLOSE, INSTALL, INSTALL_RECEIVED }
 enum class Menu { MAIN, CONFIRM, INFO, KEYS }
 
 data class Row(val id: String, val title: String, val sub: String = "", val kind: Kind, val file: File? = null, val act: Act? = null)
@@ -44,6 +44,8 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
     var phone by mutableStateOf("Telefono: controllo…")
     var update by mutableStateOf("Cerca aggiornamenti")
     var permTick by mutableIntStateOf(0)
+    var pendingApk by mutableStateOf<File?>(null)
+    private var updateChecked = false
     var permRequester: (() -> Unit)? = null
     private var savedCursor = 0
     private var acc = 0f
@@ -68,6 +70,7 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
 
     private fun homeRows(): List<Row> = buildList {
         permTick
+        pendingApk?.let { add(Row("apkrecv", "Installa aggiornamento", "Ricevuto dal telefono", Kind.ACTION, act = Act.INSTALL_RECEIVED)) }
         add(Row("storage", "Memoria", if (WatchStorage.hasAll(ctx)) "Tutto l'orologio" else "Solo cartella dell'app", Kind.HOME, act = Act.OPEN_STORAGE))
         add(Row("recv", "Ricevuti dal telefono", received.name, Kind.HOME, act = Act.OPEN_RECEIVED))
         if (!WatchStorage.hasAll(ctx)) add(Row("grant", "Consenti tutti i file", "Tocca per abilitare", Kind.ACTION, act = Act.GRANT))
@@ -79,6 +82,7 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
     private fun menuRows(m: Menu): List<Row> = when (m) {
         Menu.MAIN -> buildList {
             val n = menuTargets.size
+            if (n == 1 && menuTargets[0].isFile && menuTargets[0].extension.equals("apk", true)) add(Row("m_inst", "Installa", "App", Kind.ACTION, act = Act.INSTALL))
             add(Row("m_copy", "Copia ($n)", kind = Kind.ACTION, act = Act.COPY))
             add(Row("m_cut", "Sposta ($n)", kind = Kind.ACTION, act = Act.CUT))
             if (clip.isNotEmpty()) add(Row("m_paste", "Incolla qui (${clip.size})", if (clipCut) "Sposta" else "Copia", Kind.ACTION, act = Act.PASTE))
@@ -204,6 +208,8 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
             Act.GRANT -> permRequester?.invoke()
             Act.KEYS -> { savedCursor = cursor; menu = Menu.KEYS; cursor = 0 }
             Act.UPDATE -> checkUpdate()
+            Act.INSTALL -> { val f = menuTargets.firstOrNull(); closeMenu(); if (f != null) installApk(f) }
+            Act.INSTALL_RECEIVED -> pendingApk?.let { installApk(it) }
             Act.UP -> back()
             Act.COPY -> { clip = menuTargets; clipCut = false; selection = emptySet(); closeMenu(); flash("Copiati ${clip.size}") }
             Act.CUT -> { clip = menuTargets; clipCut = true; selection = emptySet(); closeMenu(); flash("Pronti da spostare ${clip.size}") }
@@ -243,12 +249,30 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
     // ---------- stato ----------
     fun refreshStatus() {
         permTick++
+        viewModelScope.launch(Dispatchers.IO) {
+            pendingApk = runCatching { findPending() }.getOrNull()
+            if (!updateChecked) {
+                updateChecked = true
+                WatchUpdater.check()?.let { if (it.build > BuildConfig.BUILD_NUMBER) update = "Aggiorna alla build ${it.build}" }
+            }
+        }
         Wearable.getCapabilityClient(ctx).getCapability(Proto.CAP_PHONE, CapabilityClient.FILTER_REACHABLE)
             .addOnSuccessListener { c ->
                 phone = c.nodes.firstOrNull()?.let { "Telefono: ${it.displayName}" } ?: "Telefono non collegato"
             }
             .addOnFailureListener { phone = "Telefono non collegato" }
         if (dir != null) load()
+    }
+
+    private fun installApk(f: File) {
+        flash("Avvio installazione…")
+        viewModelScope.launch(Dispatchers.IO) { runCatching { WatchUpdater.install(ctx, f) }.onFailure { flash("Errore: ${it.message}") } }
+    }
+
+    private fun findPending(): File? {
+        val f = File(received, "GestoreFileWatch.apk").takeIf { it.exists() } ?: return null
+        val v = ctx.packageManager.getPackageArchiveInfo(f.path, 0)?.longVersionCode ?: return null
+        return f.takeIf { v > BuildConfig.VERSION_CODE }
     }
 
     private fun checkUpdate() {
