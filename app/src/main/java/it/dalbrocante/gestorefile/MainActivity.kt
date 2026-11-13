@@ -62,6 +62,7 @@ import it.dalbrocante.gestorefile.ui.ViewerScreen
 import it.dalbrocante.gestorefile.ui.hasInternalViewer
 import it.dalbrocante.gestorefile.util.Updater
 import it.dalbrocante.gestorefile.ui.WatchScreen
+import it.dalbrocante.gestorefile.ui.WatchInstallDialog
 import it.dalbrocante.gestorefile.wear.WearBridge
 import it.dalbrocante.gestorefile.util.openExternal
 import kotlinx.coroutines.Dispatchers
@@ -211,6 +212,7 @@ class MainActivity : FragmentActivity() {
         var tagging by remember { mutableStateOf<List<File>?>(null) }
         var linking by remember { mutableStateOf<File?>(null) }
         var update by remember { mutableStateOf<Updater.Info?>(null) }
+        var watchApks by remember { mutableStateOf<List<File>?>(null) }
 
         LaunchedEffect(Unit) {
             update = withContext(Dispatchers.IO) { Updater.check() }?.takeIf { Updater.isNewer(it) }
@@ -248,6 +250,7 @@ class MainActivity : FragmentActivity() {
             linkFile = { linking = it },
             installApks = { ApkInstaller.start(this, it); vm.clearSelection() },
             openWatch = { route = Route.Watch },
+            installOnWatch = { watchApks = it },
             sendToWatch = { files ->
                 val items = WearBridge.expand(files)
                 if (items.isEmpty()) vm.message = "Niente da inviare"
@@ -304,6 +307,7 @@ class MainActivity : FragmentActivity() {
         }
         linking?.let { f -> LinkDialog(f) { linking = null; vm.clearSelection() } }
         update?.let { u -> UpdateDialog(u) { update = null } }
+        watchApks?.let { f -> WatchInstallDialog(f) { watchApks = null; vm.clearSelection() } }
     }
 
     private fun requestAccess() {

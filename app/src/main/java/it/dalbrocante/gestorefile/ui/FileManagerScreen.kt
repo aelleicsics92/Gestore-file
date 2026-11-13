@@ -90,6 +90,7 @@ data class Nav(
     val installApks: (List<File>) -> Unit,
     val openWatch: () -> Unit,
     val sendToWatch: (List<File>) -> Unit,
+    val installOnWatch: (List<File>) -> Unit,
 )
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -382,6 +383,7 @@ fun FileManagerScreen(vm: FileViewModel, nav: Nav) {
                             if (one != null && one.isFile) add(Tile(Icons.Filled.Link, "Link temporaneo", Color(0xFF06B6D4)) { sheet = Sheet.NONE; nav.linkFile(one) })
                             if (sel.all { it.isFile && it.extension.equals("apk", true) }) {
                                 add(Tile(Icons.Filled.Android, "Installa APK", Color(0xFF14B8A6)) { sheet = Sheet.NONE; nav.installApks(sel.toList()) })
+                                add(Tile(Icons.Filled.Watch, "Installa sull'orologio", Color(0xFF0EA5E9)) { sheet = Sheet.NONE; nav.installOnWatch(sel.toList()) })
                             }
                             add(Tile(Icons.Filled.Watch, "Invia all'orologio", Color(0xFF14B8A6)) { sheet = Sheet.NONE; nav.sendToWatch(sel.toList()) })
                             add(Tile(Icons.Filled.DeleteForever, "Elimina per sempre", Color(0xFFE5484D)) { sheet = Sheet.NONE; dlg = Dlg.DeleteConfirm })

@@ -28,7 +28,7 @@ import java.io.File
 import kotlin.math.abs
 
 enum class Kind { HOME, DIR, FILE, ACTION, DANGER, INFO }
-enum class Act { OPEN_STORAGE, OPEN_RECEIVED, GRANT, KEYS, UPDATE, UP, COPY, CUT, DELETE, CONFIRM_DELETE, INFO, SELALL, SELNONE, PASTE, MKDIR, HIDDEN, CLOSE, INSTALL, INSTALL_RECEIVED, OPEN_PHONE, PHONE_GET, MENU }
+enum class Act { OPEN_STORAGE, OPEN_RECEIVED, GRANT, KEYS, UPDATE, UP, COPY, CUT, DELETE, CONFIRM_DELETE, INFO, SELALL, SELNONE, PASTE, MKDIR, HIDDEN, CLOSE, INSTALL, INSTALL_RECEIVED, OPEN_PHONE, PHONE_GET, MENU, ROTARY }
 enum class Menu { MAIN, CONFIRM, INFO, KEYS, PHONE }
 
 data class Row(val id: String, val title: String, val sub: String = "", val kind: Kind, val file: File? = null, val act: Act? = null)
@@ -50,6 +50,8 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
     var update by mutableStateOf("Cerca aggiornamenti")
     var permTick by mutableIntStateOf(0)
     var pendingApk by mutableStateOf<File?>(null)
+    private val wprefs = ctx.getSharedPreferences("wear", android.content.Context.MODE_PRIVATE)
+    var rotarySens by mutableIntStateOf(wprefs.getInt("rot", 1))
     var lastKey by mutableIntStateOf(0)
     var phoneMode by mutableStateOf(false)
     var pPath by mutableStateOf("")
@@ -89,6 +91,7 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
         if (!WatchStorage.hasAll(ctx)) add(Row("grant", "Consenti tutti i file", "Tocca per abilitare", Kind.ACTION, act = Act.GRANT))
         if (phone.startsWith("Telefono:")) add(Row("phone", phone, "Sfoglia i suoi file", Kind.HOME, act = Act.OPEN_PHONE))
         else add(Row("phone", phone, "", Kind.INFO))
+        add(Row("rot", "Ghiera: ${LABELS[rotarySens]}", "Tocca per cambiare", Kind.ACTION, act = Act.ROTARY))
         add(Row("keys", "Guida pulsanti", "", Kind.HOME, act = Act.KEYS))
         add(Row("upd", update, "Versione ${BuildConfig.BUILD_NUMBER}", Kind.HOME, act = Act.UPDATE))
     }
@@ -195,9 +198,10 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
     fun rotate(px: Float): Boolean {
         acc += px
         var moved = false
-        while (abs(acc) >= STEP) {
+        val step = STEPS[rotarySens]
+        while (abs(acc) >= step) {
             val dirn = if (acc > 0) 1 else -1
-            acc -= dirn * STEP
+            acc -= dirn * step
             val n = (cursor + dirn).coerceIn(0, (rows.size - 1).coerceAtLeast(0))
             if (n != cursor) { cursor = n; moved = true }
         }
@@ -254,6 +258,7 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
             }
             Act.INFO -> { menu = Menu.INFO; cursor = 0 }
             Act.SELALL -> { selection = (if (phoneMode) pEntries else entries).map { it.path }.toSet(); closeMenu() }
+            Act.ROTARY -> { rotarySens = (rotarySens + 1) % STEPS.size; wprefs.edit().putInt("rot", rotarySens).apply(); flash("Ghiera: ${LABELS[rotarySens]}") }
             Act.OPEN_PHONE -> openPhone("")
             Act.MENU -> openMenu(if (phoneMode) Menu.PHONE else Menu.MAIN, selection.map { File(it) })
             Act.PHONE_GET -> { val t = menuTargets.map { it.path }; val dst = received.absolutePath; closeMenu(); selection = emptySet(); phoneGet(t, dst) }
@@ -360,5 +365,8 @@ class WatchVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    companion object { private const val STEP = 48f }
+    companion object {
+        private val STEPS = floatArrayOf(40f, 100f, 180f)
+        private val LABELS = arrayOf("Alta", "Media", "Bassa")
+    }
 }
