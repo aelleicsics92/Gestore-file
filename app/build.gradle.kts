@@ -110,6 +110,11 @@ dependencies {
 // pdfbox-android e smbj portano due varianti di BouncyCastle: teniamo solo jdk18on.
 configurations.all {
     exclude(group = "org.bouncycastle", module = "bcprov-jdk15to18")
+    exclude(group = "org.bouncycastle", module = "bcpkix-jdk15to18")
+    exclude(group = "org.bouncycastle", module = "bcutil-jdk15to18")
+    exclude(group = "org.bouncycastle", module = "bcmail-jdk15to18")
+    exclude(group = "org.bouncycastle", module = "bctls-jdk15to18")
+    exclude(group = "org.bouncycastle", module = "bcjmail-jdk15to18")
 }
 
 kotlin {
