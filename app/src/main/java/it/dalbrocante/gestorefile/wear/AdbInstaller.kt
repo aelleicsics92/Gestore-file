@@ -3,21 +3,26 @@ package it.dalbrocante.gestorefile.wear
 import android.content.Context
 import com.flyfishxu.kadb.Kadb
 import com.flyfishxu.kadb.cert.KadbCert
-import com.flyfishxu.kadb.cert.OkioFilePrivateKeyStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okio.FileSystem
-import okio.Path.Companion.toOkioPath
 import java.io.File
 
 /** Installa l'app sull'orologio via debug Wi-Fi (come Wear Installer 2). */
 object AdbInstaller {
     private var ready = false
 
+    /** L'identità ADB (certificato + chiave) resta salvata: l'associazione con l'orologio vale anche dopo la chiusura dell'app. */
     @Synchronized
     private fun init(ctx: Context) {
         if (ready) return
-        KadbCert.configure(OkioFilePrivateKeyStore(File(ctx.filesDir, "adb_identity.pem").toOkioPath(), FileSystem.SYSTEM))
+        val cf = File(ctx.filesDir, "adb_cert.bin")
+        val kf = File(ctx.filesDir, "adb_key.bin")
+        if (cf.exists() && kf.exists()) KadbCert.set(cf.readBytes(), kf.readBytes())
+        else {
+            val p = KadbCert.get()
+            cf.writeBytes(p.first); kf.writeBytes(p.second)
+            KadbCert.set(p.first, p.second)
+        }
         ready = true
     }
 
