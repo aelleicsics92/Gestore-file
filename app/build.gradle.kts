@@ -55,7 +55,7 @@ android {
 
 dependencies {
     implementation(project(":shared"))
-    implementation("com.flyfishxu:kadb:2.1.5")
+    implementation("com.flyfishxu:kadb:1.3.0")
     implementation("com.squareup.okio:okio:3.18.2")
     implementation("com.google.android.gms:play-services-wearable:18.2.0")
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
@@ -121,5 +121,3 @@ kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
 
-// Kadb 2.1.5 dichiara compileSdk 37, ma usa solo API già presenti su Android 13+: saltiamo il controllo dei metadati AAR.
-tasks.matching { it.name.endsWith("AarMetadata") }.configureEach { enabled = false }
