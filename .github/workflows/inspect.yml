@@ -1,0 +1,23 @@
+name: inspect
+on:
+  push:
+    branches: [inspect5]
+jobs:
+  x:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - name: Versions
+        run: |
+          B=https://repo1.maven.org/maven2/com/flyfishxu/kadb-android
+          for v in 1.2.1 1.3.0 2.1.1 2.1.2; do
+            mkdir -p w$v && cd w$v
+            curl -sfL $B/$v/kadb-android-$v.aar -o k.aar && unzip -oq k.aar classes.jar
+            unzip -oq classes.jar 'com/flyfishxu/kadb/Kadb.class'
+            echo "RES v=$v major=$(javap -v com/flyfishxu/kadb/Kadb.class | grep 'major version')"
+            echo "RES v=$v pair=$(javap -cp classes.jar 'com.flyfishxu.kadb.Kadb$Companion' | grep -c ' pair(')"
+            echo "RES v=$v minCompileSdk=$(unzip -p k.aar META-INF/com/android/build/gradle/aar-metadata.properties | grep -i minCompile)"
+            echo "RES v=$v cert=$(unzip -l classes.jar | grep -c 'cert/KadbCert.class')"
+            cd ..
+          done
